@@ -393,6 +393,14 @@
         thresholds: [3, 5, 8]
         argumentsPreviewChars: 500
 
+    # Keep an active todo list current across native calls and Code Mode
+    # sub-dispatches; the outer run_code transport and todo_write stay reachable.
+    - id: todo-freshness-guard
+      name: '@deepseek-ai/dsh-todo-freshness-guard'
+      config:
+        reminderAfterCalls: 5
+        blockAfterCalls: 8
+
     # Every mode enables the stable model-facing web_search tool. DeepSeek search
     # resolves the same DEEPSEEK_API_KEY credential the Models page manages for
     # chat, at each search; its Messages endpoint is separate from the

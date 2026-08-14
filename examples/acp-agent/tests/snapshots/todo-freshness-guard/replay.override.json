@@ -1,0 +1,92 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-todo-start", "name": "todo_write", "argumentsDelta": "{\"todos\":[{\"content\":\"verify todo freshness\",\"status\":\"in_progress\"}]}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-todo-start", "name": "todo_write", "arguments": "{\"todos\":[{\"content\":\"verify todo freshness\",\"status\":\"in_progress\"}]}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-probe-one", "name": "bash", "argumentsDelta": "{\"command\":\"printf FIRST\",\"description\":\"Run first freshness probe\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-probe-one", "name": "bash", "arguments": "{\"command\":\"printf FIRST\",\"description\":\"Run first freshness probe\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-probe-two", "name": "bash", "argumentsDelta": "{\"command\":\"printf SECOND\",\"description\":\"Run second freshness probe\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-probe-two", "name": "bash", "arguments": "{\"command\":\"printf SECOND\",\"description\":\"Run second freshness probe\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-probe-three", "name": "bash", "argumentsDelta": "{\"command\":\"printf THIRD\",\"description\":\"Run third freshness probe\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-probe-three", "name": "bash", "arguments": "{\"command\":\"printf THIRD\",\"description\":\"Run third freshness probe\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-probe-blocked", "name": "bash", "argumentsDelta": "{\"command\":\"printf SHOULD_NOT_RUN > blocked-probe.txt\",\"description\":\"Attempt stale freshness probe\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-probe-blocked", "name": "bash", "arguments": "{\"command\":\"printf SHOULD_NOT_RUN > blocked-probe.txt\",\"description\":\"Attempt stale freshness probe\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-todo-refresh", "name": "todo_write", "argumentsDelta": "{\"todos\":[{\"content\":\"verify todo freshness\",\"status\":\"in_progress\"}]}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-todo-refresh", "name": "todo_write", "arguments": "{\"todos\":[{\"content\":\"verify todo freshness\",\"status\":\"in_progress\"}]}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-probe-recovery", "name": "bash", "argumentsDelta": "{\"command\":\"test ! -e blocked-probe.txt && printf RECOVERED\",\"description\":\"Verify blocked probe and freshness recovery\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-probe-recovery", "name": "bash", "arguments": "{\"command\":\"test ! -e blocked-probe.txt && printf RECOVERED\",\"description\":\"Verify blocked probe and freshness recovery\"}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 0, "id": "freshness-todo-complete", "name": "todo_write", "argumentsDelta": "{\"todos\":[{\"content\":\"verify todo freshness\",\"status\":\"completed\"}]}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "freshness-todo-complete", "name": "todo_write", "arguments": "{\"todos\":[{\"content\":\"verify todo freshness\",\"status\":\"completed\"}]}" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
+      { "type": "finish", "reason": { "kind": "tool-calls" } }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      { "type": "block-start", "index": 0, "blockType": "text" },
+      { "type": "text-delta", "index": 0, "text": "TODO_FRESHNESS_OK" },
+      { "type": "block-end", "index": 0, "block": { "type": "text", "text": "TODO_FRESHNESS_OK" } },
+      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 3 } },
+      { "type": "finish", "reason": { "kind": "stop" } }
+    ]
+  }
+]
