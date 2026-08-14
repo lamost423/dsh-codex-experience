@@ -25,12 +25,17 @@ function bench() {
     projections: { faceOf: vi.fn() },
   } as unknown as SessionFace
   const fork = vi.fn().mockResolvedValue(sid('child'))
+  const discardEphemeral = vi.fn().mockResolvedValue(undefined)
+  const binding = vi.fn((id: SessionId) => id === sid('child')
+    ? { sessionId: id, session: child, ctx: {} }
+    : undefined)
   const sessions = {
     fork,
-    binding: (id: SessionId) => id === sid('child') ? { sessionId: id, session: child, ctx: {} } : undefined,
+    discardEphemeral,
+    binding,
   } as unknown as ISessions
   const controller = new SideChatController(sessions, sid('parent'))
-  return { controller, fork, prompt, off, emit: () => { listener?.() } }
+  return { controller, fork, discardEphemeral, binding, prompt, off, emit: () => { listener?.() } }
 }
 
 function failedPrompt(code = 'rejected', message = 'try again') {
@@ -38,6 +43,21 @@ function failedPrompt(code = 'rejected', message = 'try again') {
 }
 
 describe('SideChatController', () => {
+  it('rejects empty input and sends an unanchored prompt without an atSeq', async () => {
+    const b = bench()
+    expect(await b.controller.send('   ')).toEqual({ ok: false, error: 'empty-message' })
+    expect(await b.controller.send(' plain question ')).toEqual({ ok: true })
+    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'parent', ephemeral: true })
+    expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: 'plain question' }], 'queue')
+  })
+
+  it('bounds an oversized quote before delivery', async () => {
+    const b = bench()
+    b.controller.open({ seq: 1, text: `  ${'x'.repeat(4_010)}  ` })
+    expect(b.controller.getSnapshot().origin?.text).toHaveLength(4_001)
+    expect(b.controller.getSnapshot().origin?.text.endsWith('…')).toBe(true)
+  })
+
   it('forks once at the addressed sequence and reuses the child', async () => {
     const b = bench()
     b.controller.open({ seq: 42, text: 'selected answer' })
@@ -47,7 +67,7 @@ describe('SideChatController', () => {
     await b.controller.send('why?')
 
     expect(b.fork).toHaveBeenCalledTimes(1)
-    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'parent', atSeq: 42, increaseTitle: true })
+    expect(b.fork).toHaveBeenCalledWith({ sessionId: 'parent', atSeq: 42, ephemeral: true })
     const sent = b.prompt.mock.calls[0]?.[0]
     expect(sent?.[0]?.type).toBe('text')
     if (sent?.[0]?.type !== 'text') throw new Error('expected a text prompt')
@@ -117,6 +137,42 @@ describe('SideChatController', () => {
     expect(retryPart.text).toContain('retry quote')
   })
 
+  it('normalizes thrown prompt and fork failures', async () => {
+    const promptFailure = bench()
+    promptFailure.prompt.mockRejectedValueOnce('prompt exploded')
+    expect(await promptFailure.controller.send('question')).toEqual({ ok: false, error: 'prompt exploded' })
+    expect(promptFailure.controller.getSnapshot().phase).toBe('error')
+
+    const forkFailure = bench()
+    forkFailure.fork.mockRejectedValueOnce(new Error('fork exploded'))
+    forkFailure.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(forkFailure.controller.getSnapshot()).toMatchObject({ phase: 'error', error: 'fork exploded' }) })
+
+    const nonErrorFork = bench()
+    nonErrorFork.fork.mockRejectedValueOnce('plain fork failure')
+    nonErrorFork.controller.open({ seq: 2, text: 'answer' })
+    await vi.waitFor(() => { expect(nonErrorFork.controller.getSnapshot().error).toBe('plain fork failure') })
+  })
+
+  it('restores an anchored quote after a thrown prompt unless a newer quote replaced it', async () => {
+    const restored = bench()
+    restored.prompt.mockRejectedValueOnce(new Error('transport failed'))
+    restored.controller.open({ seq: 1, text: 'old quote' })
+    expect(await restored.controller.send('question')).toEqual({ ok: false, error: 'transport failed' })
+    expect(restored.controller.getSnapshot().origin).toEqual({ seq: 1, text: 'old quote' })
+
+    const retained = bench()
+    let rejectPrompt: ((error: unknown) => void) | undefined
+    retained.prompt.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectPrompt = reject }))
+    retained.controller.open({ seq: 1, text: 'old quote' })
+    const sending = retained.controller.send('question')
+    await vi.waitFor(() => { expect(retained.prompt).toHaveBeenCalledOnce() })
+    retained.controller.open({ seq: 2, text: 'new quote' })
+    rejectPrompt?.(new Error('transport failed'))
+    await sending
+    expect(retained.controller.getSnapshot().origin).toEqual({ seq: 2, text: 'new quote' })
+  })
+
   it('does not overwrite a newer quote when an earlier send fails', async () => {
     const b = bench()
     let resolvePrompt: ((value: Awaited<ReturnType<SessionFace['prompt']>>) => void) | undefined
@@ -141,9 +197,167 @@ describe('SideChatController', () => {
     b.emit()
     expect(notify.mock.calls.length).toBe(before + 1)
 
-    b.controller.dispose()
+    await b.controller.dispose()
     expect(b.off).toHaveBeenCalledOnce()
+    expect(b.discardEphemeral).toHaveBeenCalledWith(sid('child'))
+    const afterDispose = notify.mock.calls.length
     b.emit()
-    expect(notify.mock.calls.length).toBe(before + 1)
+    expect(notify.mock.calls.length).toBe(afterDispose)
+  })
+
+  it('supports unsubscribe and contains subscriber failures', async () => {
+    const b = bench()
+    const removed = vi.fn()
+    const off = b.controller.subscribe(removed)
+    off()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    b.controller.subscribe(() => { throw new Error('observer failed') })
+    b.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(error).toHaveBeenCalled() })
+    expect(removed).not.toHaveBeenCalled()
+    error.mockRestore()
+  })
+
+  it('destroys the ephemeral child on close and creates a fresh one next time', async () => {
+    const b = bench()
+    b.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(b.controller.getSnapshot().phase).toBe('ready') })
+
+    await b.controller.close()
+    expect(b.discardEphemeral).toHaveBeenCalledWith(sid('child'))
+    expect(b.controller.getSnapshot()).toMatchObject({ childSessionId: null, phase: 'idle' })
+
+    b.controller.open({ seq: 2, text: 'again' })
+    await vi.waitFor(() => { expect(b.fork).toHaveBeenCalledTimes(2) })
+  })
+
+  it('closes an idle controller without issuing a discard', async () => {
+    const b = bench()
+    await b.controller.close()
+    expect(b.discardEphemeral).not.toHaveBeenCalled()
+    expect(b.controller.getSnapshot().phase).toBe('idle')
+  })
+
+  it('waits for an in-flight fork before discarding the child', async () => {
+    const b = bench()
+    let resolveFork: ((id: SessionId) => void) | undefined
+    b.fork.mockImplementation(() => new Promise<SessionId>((resolve) => { resolveFork = resolve }))
+    b.controller.open({ seq: 1, text: 'answer' })
+
+    const closing = b.controller.close()
+    expect(b.discardEphemeral).not.toHaveBeenCalled()
+    resolveFork?.(sid('child'))
+    await closing
+
+    expect(b.discardEphemeral).toHaveBeenCalledWith(sid('child'))
+    expect(b.controller.getSnapshot()).toMatchObject({ childSessionId: null, phase: 'idle' })
+  })
+
+  it('coalesces closes and blocks open/send while teardown is pending', async () => {
+    const b = bench()
+    b.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(b.controller.getSnapshot().phase).toBe('ready') })
+    let finishDiscard: (() => void) | undefined
+    b.discardEphemeral.mockImplementation(() => new Promise<void>((resolve) => { finishDiscard = resolve }))
+    const first = b.controller.close()
+    const second = b.controller.close()
+    b.controller.open({ seq: 2, text: 'ignored' })
+    expect(await b.controller.send('ignored')).toEqual({ ok: false, error: 'side-chat-closing' })
+    expect(b.controller.getSnapshot().origin).toEqual({ seq: 1, text: 'answer' })
+    finishDiscard?.()
+    await Promise.all([first, second])
+    expect(b.discardEphemeral).toHaveBeenCalledOnce()
+  })
+
+  it('retains the child capability after discard failure and retries it', async () => {
+    const b = bench()
+    b.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(b.controller.getSnapshot().phase).toBe('ready') })
+    b.discardEphemeral.mockRejectedValueOnce(new Error('temporary teardown failure'))
+
+    await expect(b.controller.close()).rejects.toThrow('temporary teardown failure')
+    expect(b.controller.getSnapshot().childSessionId).toBe(sid('child'))
+    expect(b.off).not.toHaveBeenCalled()
+    await b.controller.close()
+
+    expect(b.discardEphemeral).toHaveBeenCalledTimes(2)
+    expect(b.off).toHaveBeenCalledOnce()
+    expect(b.controller.getSnapshot().childSessionId).toBeNull()
+  })
+
+  it('discards a fork that cannot be bound on the client', async () => {
+    const b = bench()
+    b.binding.mockReturnValue(undefined)
+    b.controller.open({ seq: 1, text: 'answer' })
+
+    await vi.waitFor(() => { expect(b.controller.getSnapshot().phase).toBe('error') })
+    expect(b.discardEphemeral).toHaveBeenCalledWith(sid('child'))
+  })
+
+  it('releases cleanly when an in-flight fork fails during close', async () => {
+    const b = bench()
+    let rejectFork: ((error: unknown) => void) | undefined
+    b.fork.mockImplementation(() => new Promise<SessionId>((_resolve, reject) => { rejectFork = reject }))
+    b.controller.open({ seq: 1, text: 'answer' })
+    const closing = b.controller.close()
+    rejectFork?.(new Error('fork failed while closing'))
+    await closing
+    expect(b.controller.getSnapshot()).toMatchObject({ childSessionId: null, phase: 'idle' })
+  })
+
+  it('coalesces parent disposal and waits for an in-flight fork before discarding it', async () => {
+    const b = bench()
+    let resolveFork: ((id: SessionId) => void) | undefined
+    b.fork.mockImplementation(() => new Promise<SessionId>((resolve) => { resolveFork = resolve }))
+    b.controller.open({ seq: 1, text: 'answer' })
+    const first = b.controller.dispose()
+    const second = b.controller.dispose()
+    b.controller.open({ seq: 2, text: 'ignored' })
+    expect(await b.controller.send('during dispose')).toEqual({ ok: false, error: 'side-chat-closing' })
+    resolveFork?.(sid('child'))
+    await Promise.all([first, second])
+    expect(b.discardEphemeral).toHaveBeenCalledWith(sid('child'))
+    expect(await b.controller.send('after dispose')).toMatchObject({ ok: false })
+    await b.controller.dispose()
+    await b.controller.close()
+  })
+
+  it('retains the child after failed parent disposal and allows teardown retry', async () => {
+    const b = bench()
+    b.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(b.controller.getSnapshot().phase).toBe('ready') })
+    b.discardEphemeral.mockRejectedValueOnce(new Error('dispose failed'))
+    await expect(b.controller.dispose()).rejects.toThrow('dispose failed')
+    expect(b.controller.getSnapshot().childSessionId).toBe(sid('child'))
+    await b.controller.dispose()
+    expect(b.discardEphemeral).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not restore state after a send finishes beyond close generation', async () => {
+    const b = bench()
+    let resolvePrompt: ((value: Awaited<ReturnType<SessionFace['prompt']>>) => void) | undefined
+    b.prompt.mockImplementationOnce(() => new Promise((resolve) => { resolvePrompt = resolve }))
+    b.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(b.controller.getSnapshot().phase).toBe('ready') })
+    const sending = b.controller.send('question')
+    await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledOnce() })
+    await b.controller.close()
+    resolvePrompt?.({ ok: true, value: { accepted: true } })
+    expect(await sending).toEqual({ ok: true })
+    expect(b.controller.getSnapshot().phase).toBe('idle')
+  })
+
+  it('does not restore an old quote when a prompt rejects after close', async () => {
+    const b = bench()
+    let rejectPrompt: ((error: unknown) => void) | undefined
+    b.prompt.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectPrompt = reject }))
+    b.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(b.controller.getSnapshot().phase).toBe('ready') })
+    const sending = b.controller.send('question')
+    await vi.waitFor(() => { expect(b.prompt).toHaveBeenCalledOnce() })
+    await b.controller.close()
+    rejectPrompt?.(new Error('late failure'))
+    expect(await sending).toEqual({ ok: false, error: 'late failure' })
+    expect(b.controller.getSnapshot()).toMatchObject({ origin: null, phase: 'idle', error: null })
   })
 })

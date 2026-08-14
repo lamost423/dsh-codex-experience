@@ -94,7 +94,14 @@ export interface ISessions {
    * @returns the child session id.
    * @throws when the fork fails, or when a requested child-title rename fails after creation.
    */
-  fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId>
+  fork(opts: {
+    sessionId: SessionId
+    atSeq?: number
+    increaseTitle?: boolean
+    ephemeral?: true
+  }): Promise<SessionId>
+  /** Destroy a runtime-only fork. Ordinary sessions are never accepted. */
+  discardEphemeral(sessionId: SessionId): Promise<void>
   /**
    * Register a per-session standard-props provider (hooks become `use<Name>`
    * selector hooks on the render side; props spread verbatim).

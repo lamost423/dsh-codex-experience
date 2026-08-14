@@ -23,6 +23,8 @@
 - paragraph: LIGHTHOUSE
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":

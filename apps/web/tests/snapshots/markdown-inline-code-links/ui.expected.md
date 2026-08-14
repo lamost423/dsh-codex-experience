@@ -29,6 +29,8 @@
 - paragraph: INLINE_CODE_LINK_DONE
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":

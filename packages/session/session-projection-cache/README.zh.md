@@ -25,6 +25,8 @@
 
 两个 `Config` 字段均必填（无默认值）：写入节奏是部署选择，没有普适正确值，由 cordis.yml 明示。
 
+header 带 `ephemeral: true` 的仅运行时 Session 会从事件、定时器、`turn/end` 和释放写入路径中全部排除。直接调用 `write(session)` 也会拒绝它们，从而保证临时对话不留下持久投影记录。
+
 ## 列表读（`cachedSnapshot(meta)`）
 
 零 I/O 一档：从身份匹配的存储记录直接 view 全量值（仅版本匹配的 key），以 `{asOfSeq, values}` 切面返回——`asOfSeq` 取所服务行的最低水位，客户端在 higher-seq-wins 规则下播种值存储时，陈旧列表块永远压不过更新的推送帧。无可用记录（未知 id、无关生命周期、无版本匹配行）时返回 `undefined`；api-proxy 列表载体将其转为列缺席。
@@ -33,7 +35,7 @@
 
 读取阶梯，正常路径无需加载全量日志：缓存行 → `sessionProjections.restoreFloor`（锚定在最低可用水位之前一个事件的位置）→ 持久化 `readFrom(id, floor)` → `sessionProjections.restore` → 刷新行的 fail-soft 写回。这个锚使缩短的日志（崩溃修复截断）可被证明：越界的行恰好触发一次从 seq 0 的全量重读，而不是把幽灵值当现值服务。无已注册单元时直接服务 `{asOfSeq: -1, values: {}}`，不触碰持久化；无持久日志的会话以 seam 的 `not found` 拒绝。
 
-`write(session)` 是两个必写点共用的同步切面检查点；载体可以直接调用（非 fail-soft——由 fail-soft 包装层负责遏制）。
+`write(session)` 是两个必写点共用的同步切面检查点；载体可以直接调用（非 fail-soft——由 fail-soft 包装层负责遏制）。它拒绝仅运行时的临时 Session。
 
 ## 组合
 

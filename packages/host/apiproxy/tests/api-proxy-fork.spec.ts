@@ -1,6 +1,6 @@
 /** Session-fork boundaries, lineage, and inherited model routing. */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, type Mock, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
@@ -18,6 +18,7 @@ import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
 const sid = (id: string): SessionId => id as SessionId
 
 let nextRpc = 1
+const forkDisposers = new WeakMap<Context, Map<SessionId, Mock<() => Promise<void>>>>()
 function request<P>(payload: P): RpcRequest<P> {
   return { rpcId: RpcId(`fork-${String(nextRpc++)}`), payload }
 }
@@ -28,6 +29,8 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
   await ctx.plugin(SystemPrompt, { persona: '' })
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(UserQuestionService)
+  const disposers = new Map<SessionId, Mock<() => Promise<void>>>()
+  forkDisposers.set(ctx, disposers)
   ctx.provide('workspaceRegistry', { list: () => workspaces } as never)
   ctx.agents.setFactory({
     createAgent: async (ownerCtx: Context, options: CreateAgentOptions): Promise<AgentHandle> => {
@@ -40,7 +43,9 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
       Object.assign(agent, { id: session.id, session, status: 'idle', ctx: agentCtx })
       await options.setup?.(agentCtx)
       ctx.agents.register(agent)
-      return { agent, dispose: () => Promise.resolve() }
+      const dispose = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
+      disposers.set(session.id, dispose)
+      return { agent, dispose }
     },
     resume: () => Promise.reject(new Error('fork test sources are live')),
   })
@@ -100,6 +105,105 @@ describe('sessions.fork', () => {
     expect(child?.header.parentSession).toBe(source.id)
     expect(child?.header.cwd).toBe('/proj')
     await ctx.fiber.dispose()
+  })
+
+  it('creates an ephemeral fork outside the Workspace and discards it through its handle', async () => {
+    const attachSession = vi.fn<(sessionId: SessionId) => Promise<void>>().mockResolvedValue(undefined)
+    const sessionIds: SessionId[] = []
+    const workspace = { sessionIds, attachSession } as unknown as Workspace
+    const ctx = await composed([workspace])
+    const source = liveAgent(ctx, 'session-side-chat-source', 1)
+    sessionIds.push(source.id)
+    const proxy = api(ctx)
+
+    const forked = await proxy.sessions.fork(request({ sessionId: source.id, ephemeral: true }))
+    expect(forked.result.ok).toBe(true)
+    if (!forked.result.ok) return
+    const childId = forked.result.value.sessionId
+    expect(ctx.sessions.get(childId)?.header).toMatchObject({ ephemeral: true, parentSession: source.id })
+    expect(attachSession).not.toHaveBeenCalled()
+
+    const discarded = await proxy.sessions.cancel(request({ sessionId: childId, discardEphemeral: true }))
+    expect(discarded.result).toMatchObject({ ok: true, value: { accepted: true } })
+    expect(forkDisposers.get(ctx)?.get(childId)).toHaveBeenCalledOnce()
+    await ctx.fiber.dispose()
+  })
+
+  it('retains an ephemeral handle after failed disposal so cancel can retry', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-side-chat-retry-source', 1)
+    const proxy = api(ctx)
+    const forked = await proxy.sessions.fork(request({ sessionId: source.id, ephemeral: true }))
+    expect(forked.result.ok).toBe(true)
+    if (!forked.result.ok) return
+    const childId = forked.result.value.sessionId
+    const dispose = forkDisposers.get(ctx)?.get(childId)
+    const child = ctx.sessions.get(childId)
+    dispose?.mockImplementationOnce(() => {
+      if (child !== undefined) ctx.emit('session/disposed', child)
+      return Promise.reject(new Error('temporary teardown failure'))
+    })
+
+    const failed = await proxy.sessions.cancel(request({ sessionId: childId, discardEphemeral: true }))
+    expect(failed.result).toMatchObject({ ok: false, error: { code: 'internal' } })
+    const retried = await proxy.sessions.cancel(request({ sessionId: childId, discardEphemeral: true }))
+    expect(retried.result).toMatchObject({ ok: true, value: { accepted: true } })
+    expect(dispose).toHaveBeenCalledTimes(2)
+    await ctx.fiber.dispose()
+  })
+
+  it('coalesces concurrent ephemeral discard requests onto one handle disposal', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-side-chat-concurrent-source', 1)
+    const proxy = api(ctx)
+    const forked = await proxy.sessions.fork(request({ sessionId: source.id, ephemeral: true }))
+    expect(forked.result.ok).toBe(true)
+    if (!forked.result.ok) return
+    const childId = forked.result.value.sessionId
+    const dispose = forkDisposers.get(ctx)?.get(childId)
+    let finish: (() => void) | undefined
+    dispose?.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve }))
+
+    const first = proxy.sessions.cancel(request({ sessionId: childId, discardEphemeral: true }))
+    const second = proxy.sessions.cancel(request({ sessionId: childId, discardEphemeral: true }))
+    await vi.waitFor(() => { expect(dispose).toHaveBeenCalledOnce() })
+    finish?.()
+    await expect(first).resolves.toMatchObject({ result: { ok: true } })
+    await expect(second).resolves.toMatchObject({ result: { ok: true } })
+    expect(dispose).toHaveBeenCalledOnce()
+    await ctx.fiber.dispose()
+  })
+
+  it('treats a rejected real-style disposal as complete after both registries detached', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-side-chat-detached-source', 1)
+    const proxy = api(ctx)
+    const forked = await proxy.sessions.fork(request({ sessionId: source.id, ephemeral: true }))
+    expect(forked.result.ok).toBe(true)
+    if (!forked.result.ok) return
+    const childId = forked.result.value.sessionId
+    const dispose = forkDisposers.get(ctx)?.get(childId)
+    dispose?.mockRejectedValueOnce(new Error('scope cleanup failed after detach'))
+    vi.spyOn(ctx.agents, 'get').mockReturnValue(undefined)
+    vi.spyOn(ctx.sessions, 'get').mockReturnValue(undefined)
+
+    const discarded = await proxy.sessions.cancel(request({ sessionId: childId, discardEphemeral: true }))
+    expect(discarded.result).toMatchObject({ ok: true, value: { accepted: true } })
+    const repeated = await proxy.sessions.cancel(request({ sessionId: childId, discardEphemeral: true }))
+    expect(repeated.result).toMatchObject({ ok: false, error: { code: 'session-not-found' } })
+    await ctx.fiber.dispose()
+  })
+
+  it('retires every retained ephemeral child when the API proxy owner unloads', async () => {
+    const ctx = await composed()
+    const source = liveAgent(ctx, 'session-side-chat-owner-source', 1)
+    const proxy = api(ctx)
+    const forked = await proxy.sessions.fork(request({ sessionId: source.id, ephemeral: true }))
+    expect(forked.result.ok).toBe(true)
+    if (!forked.result.ok) return
+    await ctx.fiber.dispose()
+    expect(ctx.get('agents')).toBeUndefined()
+    expect(ctx.get('sessions')).toBeUndefined()
   })
 
   it('attaches a subagent fork to its nearest workspace-owning ancestor', async () => {

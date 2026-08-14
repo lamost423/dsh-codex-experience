@@ -8,7 +8,7 @@ import { mkdir, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
-import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentHandle, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -543,6 +543,7 @@ function sessionListFields(header: SessionHeader, events: readonly SessionEvent[
   // showing the creation-time value would contradict what the model saw.
   const agentPreset = resolveSessionPreset({ header, events })
   return {
+    ...header.ephemeral === true ? { ephemeral: true as const } : {},
     ...header.parentSession === undefined ? {} : { parentSessionId: header.parentSession },
     ...header.origin === undefined ? {} : { origin: header.origin },
     ...header.cwd === undefined ? {} : { cwd: header.cwd },
@@ -1125,6 +1126,28 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const presetSwitches = new Map<SessionId, Promise<unknown>>()
   /** Client-chosen identity creation/resume, deduplicated across concurrent retries. */
   const sessionCreations = new Map<SessionId, Promise<Agent>>()
+  /** Consumer capabilities for runtime-only side conversations. */
+  const ephemeralAgents = new Map<SessionId, AgentHandle>()
+  const ephemeralDisposals = new Map<SessionId, Promise<void>>()
+  ctx.on('session/disposed', (session: Session) => {
+    if (!ephemeralDisposals.has(session.id)) ephemeralAgents.delete(session.id)
+  })
+  ctx.effect(() => async () => {
+    const disposals: Promise<void>[] = []
+    for (const [sessionId, handle] of ephemeralAgents) {
+      let disposal = ephemeralDisposals.get(sessionId)
+      if (disposal === undefined) {
+        disposal = Promise.resolve().then(() => handle.dispose())
+        ephemeralDisposals.set(sessionId, disposal)
+      }
+      disposals.push(disposal.catch((error: unknown) => {
+        ctx.logger.warn(`api-proxy: ephemeral session "${sessionId}" teardown failed: ${String(error)}`)
+      }))
+    }
+    await Promise.all(disposals)
+    ephemeralDisposals.clear()
+    ephemeralAgents.clear()
+  }, 'api-proxy: ephemeral session ownership')
   /** Serializes path ownership and explicit title checks with Workspace mutations. */
   let workspaceCreationChain = Promise.resolve()
   const pendingQuestions = new Map<RpcId, PendingQuestion>()
@@ -2361,7 +2384,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async fork(request) {
-        const { sessionId, atSeq } = request.payload
+        const { sessionId, atSeq, ephemeral } = request.payload
         let source: SessionReadState
         try {
           source = await readSessionState(sessionId)
@@ -2420,7 +2443,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         // plane, composing nothing would leave the child with no tools at all.
         const forkComposition = await composeAgent(resolveSessionPreset(source))
         try {
-          await ctx.agents.create({
+          const handle = await ctx.agents.create({
             sessionId: childId,
             seed: events.slice(0, cut),
             meta: {
@@ -2430,10 +2453,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               ...forkComposition.agentPreset === undefined
                 ? {}
                 : { agentPreset: forkComposition.agentPreset },
+              ...ephemeral === true ? { ephemeral: true as const } : {},
             },
             agentOptions: agentOptions(),
             setup: forkComposition.setup,
           })
+          if (ephemeral === true) ephemeralAgents.set(childId, handle)
         } catch (error: unknown) {
           return err(request, {
             code: 'internal',
@@ -2444,7 +2469,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         // An ordinary source keeps its direct Workspace. A subagent source is
         // not listed there, so its ordinary fork joins the nearest owning
         // ancestor instead. The child is already published if attach fails.
-        if (workspace !== undefined) {
+        if (workspace !== undefined && ephemeral !== true) {
           try {
             await workspace.attachSession(childId)
           } catch (error: unknown) {
@@ -2616,7 +2641,43 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       cancel(request) {
-        const { sessionId } = request.payload
+        const { sessionId, discardEphemeral } = request.payload
+        if (discardEphemeral === true) {
+          const handle = ephemeralAgents.get(sessionId)
+          if (handle === undefined) {
+            return Promise.resolve(err(request, {
+              code: 'session-not-found',
+              message: `ephemeral session "${sessionId}" not found`,
+              details: { sessionId },
+            }))
+          }
+          let disposal = ephemeralDisposals.get(sessionId)
+          if (disposal === undefined) {
+            // Deferring invocation by one microtask installs the in-flight
+            // guard before a disposer can synchronously publish session/disposed.
+            disposal = Promise.resolve().then(() => handle.dispose())
+            ephemeralDisposals.set(sessionId, disposal)
+          }
+          return disposal.then(
+            () => {
+              ephemeralDisposals.delete(sessionId)
+              ephemeralAgents.delete(sessionId)
+              return ok(request, { accepted: true as const })
+            },
+            (error: unknown) => {
+              ephemeralDisposals.delete(sessionId)
+              if (ctx.agents.get(sessionId) === undefined && ctx.sessions.get(sessionId) === undefined) {
+                ephemeralAgents.delete(sessionId)
+                return ok(request, { accepted: true as const })
+              }
+              return err(request, {
+                code: 'internal',
+                message: `failed to discard ephemeral session "${sessionId}": ${String(error)}`,
+                details: {},
+              })
+            },
+          )
+        }
         const agent = ctx.agents.get(sessionId)
         if (agent === undefined) {
           return Promise.resolve(err(request, {

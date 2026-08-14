@@ -287,6 +287,17 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     expect((await ctx.sessionPersistence.list()).map(h => h.id)).toContain(m.id)
   })
 
+  it('never materializes an ephemeral Session', async () => {
+    const session = ctx.sessions.create(SessionId('ephemeral-side-chat'), {
+      meta: { cwd: '/work', ephemeral: true },
+    })
+    appendClosedTurn(session)
+    await ctx.sessions.flush(session)
+
+    expect((await ctx.sessionPersistence.list()).map(header => header.id)).not.toContain(session.id)
+    await expect(stat(rawLogPath(root, '/work', session.id))).rejects.toThrow()
+  })
+
   it('readRaw returns the stored artifact text verbatim with its original filename', async () => {
     const m = meta('raw-read', '/work')
     await ctx.sessionPersistence.create(m)

@@ -67,7 +67,7 @@ function listen(boundary: HTMLElement, sink: SelectionSink): () => void {
 }
 
 /** Floating action shown only for a DOM selection inside its assistant body. */
-export function SideChatSelection({ seq, open, t }: SideChatSelectionProps) {
+export function SideChatSelection({ seq, open, addToConversation, t }: SideChatSelectionProps) {
   const seatRef = useRef<HTMLDivElement | null>(null)
   const [selection, setSelection] = useState<SelectionState | null>(null)
 
@@ -80,19 +80,35 @@ export function SideChatSelection({ seq, open, t }: SideChatSelectionProps) {
   return (
     <div ref={seatRef} className={css.seat}>
       {selection !== null && (
-        <button
-          type="button"
-          className={css.action}
+        <div
+          className={css.toolbar}
           style={{ left: selection.left, top: selection.top }}
-          onPointerDown={(event) => { event.preventDefault() }}
-          onClick={() => {
-            open({ seq, text: selection.text })
-            setSelection(null)
-            window.getSelection()?.removeAllRanges()
-          }}
         >
-          {t('selection.open')}
-        </button>
+          <button
+            type="button"
+            className={css.action}
+            onPointerDown={(event) => { event.preventDefault() }}
+            onClick={() => {
+              addToConversation({ seq, text: selection.text })
+              setSelection(null)
+              window.getSelection()?.removeAllRanges()
+            }}
+          >
+            {t('selection.add')}
+          </button>
+          <button
+            type="button"
+            className={css.action}
+            onPointerDown={(event) => { event.preventDefault() }}
+            onClick={() => {
+              open({ seq, text: selection.text })
+              setSelection(null)
+              window.getSelection()?.removeAllRanges()
+            }}
+          >
+            {t('selection.open')}
+          </button>
+        </div>
       )}
     </div>
   )

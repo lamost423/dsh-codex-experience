@@ -129,6 +129,7 @@ export type HostFrame =
     type: 'host/session-added'
     sessionId: SessionId
     blank: boolean
+    ephemeral?: true
     parentSessionId?: SessionId
     origin?: 'subagent'
     cwd?: string

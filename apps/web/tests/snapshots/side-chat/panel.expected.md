@@ -4,6 +4,6 @@
 - complementary:
   - text: Quoted from the main conversation
   - paragraph: DONE
-- paragraph: Ask a question without changing the main conversation.
+- paragraph: Side chat is temporary and disappears when closed.
 - textbox "Ask a follow-up…"
 - button "Send" [disabled]

@@ -179,6 +179,15 @@ describe('SessionTelemetryCoordinator capture', () => {
 })
 
 describe('SessionTelemetryCoordinator on-demand capture', () => {
+  it('never exports an ephemeral session through explicit capture', async () => {
+    const { ctx, backend, coordinator } = await setup(new FakeBackend(), 'on-demand')
+    const session = ctx.sessions.create(SessionId('on-demand-ephemeral'), { meta: { ephemeral: true } })
+    appendTurn(session)
+
+    coordinator.captureSession(session)
+    expect(backend.records).toEqual([])
+  })
+
   it('captures one canonical-log prefix at a time without following later events', async () => {
     const { ctx, backend, coordinator } = await setup(new FakeBackend(), 'on-demand')
     const session = liveSession(ctx, 'on-demand-prefix')
@@ -432,6 +441,27 @@ describe('SessionTelemetryCoordinator adoption', () => {
 })
 
 describe('SessionTelemetryCoordinator lifecycle and containment', () => {
+  it('never adopts or exports an ephemeral session on any live path', async () => {
+    const { ctx, backend, fiber } = await setup()
+    let session!: Session
+    const owner = await ctx.plugin(Object.assign((inner: Context) => {
+      session = inner.sessions.create(SessionId('live-ephemeral'), { meta: { ephemeral: true } })
+    }, { inject: ['sessions'] }))
+    appendTurn(session)
+    await ctx.parallel('session/flush', session)
+    ctx.emit('agent/error', {
+      agent: { id: 'ephemeral-agent', session } as Agent,
+      turn: 1,
+      step: 1,
+      error: new Error('private side-chat detail'),
+    })
+    await owner.dispose()
+    await fiber.dispose()
+
+    expect(backend.records).toEqual([])
+    expect(backend.flush).not.toHaveBeenCalled()
+  })
+
   it('forwards session/flush as a hint without awaiting backend work', async () => {
     const { ctx, backend } = await setup()
     const session = liveSession(ctx)

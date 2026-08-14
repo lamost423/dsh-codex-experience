@@ -1031,6 +1031,12 @@ describe('Session', () => {
       id: SessionId('other'),
       createdAt: 123,
     })).toThrow(/does not match session id/)
+    expect(() => Session.fromRestore(SessionId('header-invalid'), [], {
+      version: SESSION_FORMAT_VERSION,
+      id: SessionId('header-invalid'),
+      createdAt: 123,
+      ephemeral: true,
+    })).toThrow(/persisted session header must not be ephemeral/)
   })
 
   it('rejects invalid scalar fields in an explicitly supplied header', () => {

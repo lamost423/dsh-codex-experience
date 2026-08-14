@@ -5,20 +5,32 @@
   pointer-events: none;
 }
 
-.action {
+.toolbar {
   position: absolute;
   transform: translateX(-50%);
+  display: flex;
   min-width: max-content;
   height: 30px;
-  padding: 0 10px;
   border: 1px solid var(--dsw-alias-border-secondary);
   border-radius: 8px;
   background: var(--dsw-alias-bg-elevated);
-  color: var(--dsw-alias-label-primary);
   box-shadow: var(--dsw-alias-shadow-popover);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.action {
+  padding: 0 10px;
+  border: 0;
+  border-right: 1px solid var(--dsw-alias-border-secondary);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xs-13);
   cursor: pointer;
-  pointer-events: auto;
+}
+
+.action:last-child {
+  border-right: 0;
 }
 
 .action:hover {

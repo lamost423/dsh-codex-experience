@@ -141,6 +141,25 @@ describe('deriveGroups', () => {
     ).items[0]).toMatchObject({ id: parent.id, runningSubagentCount: 2 })
   })
 
+  it('hides ephemeral side conversations from grouped, flat, and search navigation', () => {
+    const parent = summary('parent', 1)
+    const ephemeral = { ...summary('temporary-side-chat', 2), parentId: parent.id, ephemeral: true as const }
+    const sessions = list(parent, ephemeral)
+    const groups = deriveGroups(
+      sessions,
+      [workspace('first', ['parent', 'temporary-side-chat'])],
+      noArchive,
+      view(['first']),
+    )
+
+    expect(groups[0]!.sessions.map(node => node.id)).toEqual([parent.id])
+    expect(deriveFlat(sessions, noArchive).map(node => node.id)).toEqual([parent.id])
+    expect(deriveSearchResults(
+      sessions, [workspace('first', ['parent', 'temporary-side-chat'])], 'temporary', noArchive,
+      { items: [{ sessionId: ephemeral.id, snippet: 'temporary' }], hasMore: false }, 10,
+    ).items).toEqual([])
+  })
+
   it('ignores fork lineage and sorts every ungrouped session as a top-level row', () => {
     const parent = summary('parent', 1)
     const oldChild = { ...summary('old-child', 10), parentId: parent.id }

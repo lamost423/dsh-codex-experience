@@ -1,8 +1,9 @@
-/** Side Chat browser plugin: assistant annotations plus a fork-backed details view. */
+/** Side Chat browser plugin: answer annotations plus an ephemeral details view. */
 import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { InputTriggerSource, ReferenceInsert } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { SideChatController, type AssistantQuoteTarget } from './controller.ts'
 import { SideChatAction } from './SideChatAction.tsx'
 import { SideChatSelection } from './SideChatSelection.tsx'
@@ -21,11 +22,30 @@ export type { SideChatKey } from './locales.ts'
 const NS = 'sideChat'
 
 /** Required services for forking, slot composition, panel routing, and copy. */
-export const inject = ['slots', 'sessions', 'layout', 'locale']
+export const inject = ['slots', 'sessions', 'layout', 'locale', 'conversation', 'inputTriggers']
 
 /** Mount the three optional UI entries and their per-parent controllers. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-side-chat: dictionaries')
+
+  const annotationText = (ref: string): string => ref
+  const source: InputTriggerSource = {
+    trigger: '@',
+    name: 'answer-annotation',
+    candidates: () => Promise.resolve([]),
+    onPick: () => undefined,
+    codec: {
+      clipboardText: annotationText,
+      serialize: (ref, signal) => {
+        signal.throwIfAborted()
+        return Promise.resolve(annotationText(ref))
+      },
+    },
+  }
+  ctx.effect(() => {
+    const off = ctx.inputTriggers.registerSource(source)
+    return off
+  }, 'ui-side-chat: answer annotation reference source')
 
   const controllers = new Map<SessionId, SideChatController>()
   const controllerFor = (sessionId: SessionId): SideChatController => {
@@ -36,9 +56,10 @@ export function apply(ctx: ClientContext): void {
       controller = new SideChatController(ctx.sessions, sessionId)
       controllers.set(sessionId, controller)
       const owned = controller
-      binding.ctx.effect(() => () => {
+      binding.ctx.effect(() => async () => {
+        /* v8 ignore next -- this scope owns the only controller installed for its parent id. */
         if (controllers.get(sessionId) !== owned) return
-        owned.dispose()
+        await owned.dispose()
         controllers.delete(sessionId)
       }, 'ui-side-chat: parent controller')
     }
@@ -50,11 +71,47 @@ export function apply(ctx: ClientContext): void {
       controller.open(target)
       ctx.layout.openDetails('side-chat')
     }
+    const addToConversation = (target: AssistantQuoteTarget): void => {
+      const binding = ctx.sessions.binding(sessionId)
+      if (binding === undefined) throw new Error(`ui-side-chat: parent Session "${sessionId}" is not bound`)
+      const input = ctx.conversation.input.for(binding.ctx)
+      const quote = target.text.trim().slice(0, 4_000).replaceAll('\n', '\n> ')
+      if (quote === '') return
+      const block = `> 回答注释（消息 #${String(target.seq)}）\n> ${quote}`
+      const ref = block
+      const original = input.state.getSnapshot().draft
+      const prefix = original.trimEnd()
+      input.setDraft(prefix === '' ? '' : `${prefix}\n\n`)
+      const beforeInsert = input.state.getSnapshot()
+      const reference: ReferenceInsert = {
+        source: source.name,
+        ref,
+        label: `回答注释 #${String(target.seq)}`,
+        clipboardText: block,
+      }
+      const accepted = input.insertReference(reference, {
+        start: beforeInsert.draft.length,
+        end: beforeInsert.draft.length,
+        draftRev: beforeInsert.draftRev,
+      })
+      if (!accepted) {
+        input.setDraft(original)
+        return
+      }
+      input.setDraft(`${input.state.getSnapshot().draft}\n\n`)
+    }
     return {
       hooks: { sideChat: controller },
       open,
+      addToConversation,
       send: text => controller.send(text),
-      close: () => { ctx.layout.closeDetails() },
+      release: () => controller.close(),
+      close: () => {
+        ctx.layout.closeDetails()
+        void controller.close().catch((error: unknown) => {
+          console.error('[ui-side-chat] close failed:', error)
+        })
+      },
     }
   }
 
@@ -79,12 +136,15 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: (sessionId): SideChatInjected => faceFor(sessionId),
     }, SideChatPanel))
-    return () => {
+    return async () => {
       offPanel()
       offSelection()
       offAction()
-      for (const controller of controllers.values()) controller.dispose()
-      controllers.clear()
+      try {
+        await Promise.all([...controllers.values()].map(controller => controller.dispose()))
+      } finally {
+        controllers.clear()
+      }
     }
   }, 'ui-side-chat: annotation and panel entries')
 }

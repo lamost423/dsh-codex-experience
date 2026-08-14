@@ -1834,6 +1834,16 @@ describe('SessionPersistence service registration', () => {
     await fiber.dispose()
   })
 
+  it('rejects direct persistence of ephemeral session metadata', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    const fiber = await ctx.plugin(MemoryPersistence)
+
+    await expect(ctx.sessionPersistence.create({ ...meta('ephemeral-meta'), ephemeral: true }))
+      .rejects.toThrow('ephemeral sessions must not be persisted')
+    await fiber.dispose()
+  })
+
   it('rejects a legacy header delta from a pre-change live producer', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)

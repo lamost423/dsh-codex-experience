@@ -194,6 +194,8 @@ export interface SessionSummary {
    * or oversized artifacts conservatively report false.
    */
   blank: boolean
+  /** Runtime-only child hidden from ordinary task navigation. */
+  ephemeral?: true
   /** fork/spawn lineage (session.header.parentSession passthrough); absent for root sessions. */
   parentSessionId?: SessionId
   /** Coarse durable origin used by navigation surfaces; never proves resumability. */
@@ -334,7 +336,7 @@ export interface SessionsApi {
    * directly, or the nearest workspace-owning ancestor when the source is a
    * subagent.
    */
-  fork(request: RpcRequest<{ sessionId: SessionId; atSeq?: number }>):
+  fork(request: RpcRequest<{ sessionId: SessionId; atSeq?: number; ephemeral?: true }>):
   Promise<RpcResponse<{ sessionId: SessionId }>>
 
   /**
@@ -368,6 +370,6 @@ export interface SessionsApi {
    * that resumes in FIFO order after cancellation settles. Session-backed
    * subagents reject with `agent-busy`.
    */
-  cancel(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ accepted: true }>>
+  cancel(request: RpcRequest<{ sessionId: SessionId; discardEphemeral?: true }>): Promise<RpcResponse<{ accepted: true }>>
 
 }

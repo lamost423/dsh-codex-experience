@@ -55,6 +55,8 @@
 - paragraph: CORDIS_UI_READY
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -72,6 +74,8 @@
 - text: Dynamic Plugin snap-1 is stopped; its definition and versions remain.
 - paragraph: CORDIS_UI_DONE
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img

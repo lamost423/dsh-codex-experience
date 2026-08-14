@@ -23,6 +23,8 @@
 - paragraph: USER_INVOKE_REPLY acknowledged; following the injected skill.
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":

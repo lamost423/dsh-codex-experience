@@ -83,12 +83,14 @@ export class SessionTelemetryCoordinator {
       // Capture the shutdown marker at the session's own termination edge,
       // then retire the only strong reference owned by this coordinator.
       ctx.on('session/disposed', (session) => {
+        if (isEphemeral(session)) return
         this.contain(() => {
           if (!this.adopted.delete(session)) return
           this.deliver(session, { record: this.redact(shutdownRecord(session)) })
         })
       })
       ctx.on('session/event', (session, event) => {
+        if (isEphemeral(session)) return
         this.contain(() => {
           this.captureEvent(session, event)
         })
@@ -136,6 +138,7 @@ export class SessionTelemetryCoordinator {
    * @param throughSeq - optional last sequence included in this capture.
    */
   captureSession(session: Session, throughSeq?: number): void {
+    if (isEphemeral(session)) return
     const cursor = handoffCursor.get(session) ?? session.firstLiveSeq - 1
     // Containment is PER EVENT: one rejected record is withheld fail-closed
     // while the rest of the historical replay proceeds.
@@ -164,7 +167,7 @@ export class SessionTelemetryCoordinator {
    * @param session - the live session to adopt; a second adoption is a no-op.
    */
   private adopt(session: Session): void {
-    if (this.adopted.has(session)) return
+    if (isEphemeral(session) || this.adopted.has(session)) return
     this.adopted.add(session)
     this.captureSession(session)
   }
@@ -227,6 +230,7 @@ export class SessionTelemetryCoordinator {
 
   /** Relay one `agent/error` bus emission as an `agent-error` operational record. */
   private relayAgentError(agent: Agent, turn: number, step: number, error: unknown): void {
+    if (isEphemeral(agent.session)) return
     const detail = errorDetail(error)
     this.deliver(agent.session, {
       record: this.redact({
@@ -265,6 +269,11 @@ export class SessionTelemetryCoordinator {
       this.ctx.logger.warn(`telemetry: capture step failed: ${String(error)}`)
     }
   }
+}
+
+/** Runtime-only conversations never cross the telemetry boundary. */
+function isEphemeral(session: Session): boolean {
+  return session.header.ephemeral === true
 }
 
 /**

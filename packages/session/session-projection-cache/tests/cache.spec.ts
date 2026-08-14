@@ -143,6 +143,26 @@ describe('SessionProjectionCache write policy', () => {
     expect(storedRows(pool, session.id)?.['cache-test/marks']?.val).toEqual({ marks: ['live'] })
   })
 
+  it('never writes a runtime-only ephemeral session', async () => {
+    const { ctx, pool } = await harness({ config: { writeEveryEvents: 1, writeIntervalMs: 1 } })
+    let session: Session | undefined
+    const owner = await ctx.plugin(Object.assign((inner: Context) => {
+      session = inner.sessions.create(SessionId('ephemeral-cache'), { meta: { ephemeral: true } })
+    }, { inject: ['sessions'] }))
+    if (session === undefined) throw new Error('ephemeral session was not created')
+
+    mark(session, ['private'])
+    endTurn(session)
+    await settle()
+    expect(storedRows(pool, session.id)).toBeUndefined()
+    await expect(ctx.sessionProjectionCache.write(session))
+      .rejects.toThrow('ephemeral sessions must not be projection-cached')
+
+    await owner.dispose()
+    await settle()
+    expect(storedRows(pool, session.id)).toBeUndefined()
+  })
+
   it('flushes when the in-turn event count reaches the configured threshold', async () => {
     const { ctx, pool } = await harness({ config: { writeEveryEvents: 3, writeIntervalMs: 60_000 } })
     const session = ctx.sessions.create(SessionId('count'))

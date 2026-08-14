@@ -110,6 +110,7 @@ const FAMILY: SessionSummary[] = [
   summary({ id: sid('c3'), parentId: sid('parent'), displayTitle: 'worker-3', running: false }),
   summary({ id: sid('c4'), parentId: sid('other'), displayTitle: 'worker-4', running: true }),
   summary({ id: sid('c5'), parentId: sid('parent'), displayTitle: 'scout', running: true }),
+  summary({ id: sid('c6'), parentId: sid('parent'), displayTitle: 'worker-private', running: true, ephemeral: true }),
 ]
 
 const proj = (id: string): ClientSessionContext => ({ sessionId: sid(id) })

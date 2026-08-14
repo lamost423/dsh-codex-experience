@@ -639,6 +639,9 @@ export class PersistenceCoordinator<TornMarker = unknown> {
     if (!Number.isSafeInteger(snapshot.createdAt) || snapshot.createdAt < 0) {
       return Promise.reject(new TypeError('session metadata createdAt must be a non-negative safe integer'))
     }
+    if (snapshot.ephemeral === true) {
+      return Promise.reject(new TypeError('ephemeral sessions must not be persisted'))
+    }
     return this.serialize(snapshot.id, () => this.createCore(snapshot))
   }
 
@@ -1116,24 +1119,30 @@ export class PersistenceCoordinator<TornMarker = unknown> {
 
     // Capture the header on creation and persist a fork's seed once.
     ctx.on('session/created', (session) => {
+      if (session.header.ephemeral === true) return
       void this.initFor(session)
     })
 
     // Keep a persistence-owned copy of each frozen event and start its bounded window.
     ctx.on('session/event', (session, event) => {
+      if (session.header.ephemeral === true) return
       const live = this.initFor(session)
       live.writes.enqueue(event)
     })
 
     // Callers use flush as the immediate durability barrier for buffered writes.
-    ctx.on('session/flush', session => this.flush(session))
+    ctx.on('session/flush', session => session.header.ephemeral === true ? undefined : this.flush(session))
 
     // Session disposal is observe-only, so retirement contains its own failure.
-    ctx.on('session/disposed', (session) => { this.retire(session) })
+    ctx.on('session/disposed', (session) => {
+      if (session.header.ephemeral !== true) this.retire(session)
+    })
 
     // HMR: a hot reload does not replay session/created, so seed existing live
     // sessions (mirrors dsh-invariants).
-    for (const session of ctx.sessions.list()) void this.initFor(session)
+    for (const session of ctx.sessions.list()) {
+      if (session.header.ephemeral !== true) void this.initFor(session)
+    }
   }
 
   /** Start and observe one disposed session's final drain. */

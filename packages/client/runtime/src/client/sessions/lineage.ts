@@ -21,6 +21,8 @@ export interface SessionListEntry {
   running: boolean
   /** Empty-log bit mirrored from the summary; lists hide blank sessions (filtering stays with the consumer). */
   blank: boolean
+  /** Runtime-only task hidden by navigation surfaces. */
+  ephemeral?: true
   parentSessionId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'

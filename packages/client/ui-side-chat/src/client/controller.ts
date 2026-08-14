@@ -29,9 +29,9 @@ function bounded(text: string): string {
 }
 
 /**
- * Per-parent Side Chat controller. It creates at most one child fork, keeps
- * the main Session selected, and mirrors the child conversation through one
- * stable observable source.
+ * Per-parent Side Chat controller. It creates at most one ephemeral child,
+ * keeps the main Session selected, and mirrors the child conversation through
+ * one stable observable source.
  */
 export class SideChatController implements ObservableSnapshot<SideChatView> {
   #view: SideChatView
@@ -39,6 +39,8 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
   #child: SessionFace | null = null
   #offChild: (() => void) | null = null
   #fork: Promise<SessionFace> | null = null
+  #closing: Promise<void> | null = null
+  #disposing: Promise<void> | null = null
   #sending = false
   #generation = 0
   #disposed = false
@@ -66,7 +68,7 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
    * @param target - finalized source sequence and bounded quote candidate.
    */
   open(target: AssistantQuoteTarget): void {
-    if (this.#disposed) return
+    if (this.#disposed || this.#disposing !== null || this.#closing !== null) return
     this.#publish({ origin: { seq: target.seq, text: bounded(target.text) }, error: null })
     void this.#ensureChild(target.seq).catch(() => {})
   }
@@ -79,8 +81,10 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
   async send(text: string): Promise<SideChatSendResult> {
     const question = text.trim()
     if (question === '') return { ok: false, error: 'empty-message' }
+    if (this.#disposing !== null || this.#closing !== null) return { ok: false, error: 'side-chat-closing' }
     if (this.#sending) return { ok: false, error: 'send-in-progress' }
     this.#sending = true
+    const generation = this.#generation
     const origin = this.#view.origin
     if (origin !== null) this.#publish({ origin: null, error: null })
     try {
@@ -97,11 +101,11 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
         })
         return { ok: false, error }
       }
-      this.#publish({ phase: 'ready', error: null })
+      if (generation === this.#generation) this.#publish({ phase: 'ready', error: null })
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      this.#publish({
+      if (generation === this.#generation) this.#publish({
         ...(origin !== null && this.#view.origin === null ? { origin } : {}),
         phase: 'error',
         error: message,
@@ -112,14 +116,37 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
     }
   }
 
-  /** Release the child subscription and invalidate in-flight fork completion. */
-  dispose(): void {
+  /** Close the temporary conversation and destroy its Host-owned child. */
+  async close(): Promise<void> {
     if (this.#disposed) return
-    this.#disposed = true
-    this.#generation += 1
-    this.#offChild?.()
-    this.#offChild = null
-    this.#listeners.clear()
+    if (this.#closing !== null) return this.#closing
+    const closing = this.#closeCurrent()
+    this.#closing = closing
+    try {
+      await closing
+    } finally {
+      /* v8 ignore next -- close() owns this promise until this exact finally clears it. */
+      if (this.#closing === closing) this.#closing = null
+    }
+  }
+
+  /** Await child destruction before retiring this controller's capability. */
+  dispose(): Promise<void> {
+    if (this.#disposed) return Promise.resolve()
+    if (this.#disposing !== null) return this.#disposing
+    const disposing = this.#disposeCurrent()
+    this.#disposing = disposing
+    return disposing
+  }
+
+  async #disposeCurrent(): Promise<void> {
+    try {
+      await this.close()
+      this.#disposed = true
+      this.#listeners.clear()
+    } finally {
+      this.#disposing = null
+    }
   }
 
   async #ensureChild(atSeq: number | undefined): Promise<SessionFace> {
@@ -131,11 +158,13 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
     const creating = this.sessions.fork({
       sessionId: this.#view.parentSessionId,
       ...(atSeq === undefined ? {} : { atSeq }),
-      increaseTitle: true,
-    }).then((childSessionId) => {
-      if (this.#disposed || generation !== this.#generation) throw new Error('side chat fork abandoned')
+      ephemeral: true,
+    }).then(async (childSessionId) => {
       const child = this.sessions.binding(childSessionId)?.session
-      if (child === undefined) throw new Error(`side chat child "${childSessionId}" is not addressable`)
+      if (child === undefined) {
+        await this.sessions.discardEphemeral(childSessionId)
+        throw new Error(`side chat child "${childSessionId}" is not addressable`)
+      }
       this.#child = child
       this.#offChild = child.subscribe(() => {
         this.#publish({ conversation: child.getSnapshot() })
@@ -148,15 +177,54 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
       })
       return child
     }).catch((error: unknown) => {
+      /* v8 ignore else -- awaited close/dispose cannot retire an active fork before it settles. */
       if (!this.#disposed && generation === this.#generation) {
         this.#publish({ phase: 'error', error: error instanceof Error ? error.message : String(error) })
       }
       throw error
     }).finally(() => {
+      /* v8 ignore else -- generation changes only after the awaited fork settles. */
       if (generation === this.#generation) this.#fork = null
     })
     this.#fork = creating
     return creating
+  }
+
+  /** Wait for creation, then discard before releasing the only retry handle. */
+  async #closeCurrent(): Promise<void> {
+    const pending = this.#fork
+    if (pending !== null) {
+      try {
+        await pending
+      } catch {
+        /* v8 ignore else -- a rejected creation cannot also publish a child id. */
+        if (this.#view.childSessionId === null) {
+          this.#releaseChild()
+          return
+        }
+      }
+    }
+    const childId = this.#view.childSessionId
+    if (childId !== null) await this.sessions.discardEphemeral(childId)
+    this.#releaseChild()
+  }
+
+  /** Reset the view and return the child capability target, if already created. */
+  #releaseChild(): SessionId | null {
+    this.#generation += 1
+    this.#fork = null
+    this.#offChild?.()
+    this.#offChild = null
+    this.#child = null
+    const childId = this.#view.childSessionId
+    this.#publish({
+      childSessionId: null,
+      origin: null,
+      conversation: null,
+      phase: 'idle',
+      error: null,
+    })
+    return childId
   }
 
   #publish(patch: Partial<SideChatView>): void {

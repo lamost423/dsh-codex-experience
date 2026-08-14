@@ -67,6 +67,8 @@ export interface SessionSummary {
    * selected blank entry.
    */
   blank: boolean
+  /** Runtime-only task hidden by navigation surfaces. */
+  ephemeral?: true
   updatedAt: number
   /** Current host-computed projection values retained by the object layer. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>
@@ -508,6 +510,7 @@ export class SessionRuntime implements ISessions {
     sessionId: SessionId
     atSeq?: number
     increaseTitle?: boolean
+    ephemeral?: true
   }): Promise<SessionId> {
     const sourceTitle = opts.increaseTitle
       ? this.list.getSnapshot().byId[opts.sessionId]?.title
@@ -518,6 +521,7 @@ export class SessionRuntime implements ISessions {
       // turn/start), so the host's first-turn/end-at-or-after cut still ends
       // on that turn — never clipped back to the previous one.
       ...(opts.atSeq === undefined ? {} : { atSeq: Math.floor(opts.atSeq) }),
+      ...(opts.ephemeral === true ? { ephemeral: true as const } : {}),
     })
     if (!result.ok) throw new SessionForkError(result.error, opts.sessionId)
     this.projectList()
@@ -529,6 +533,15 @@ export class SessionRuntime implements ISessions {
       if (!renamed.ok) throw new Error(`fork child rename failed: ${renamed.error.code}: ${renamed.error.message}`)
     }
     return childId
+  }
+
+  /** Destroy a runtime-only fork. */
+  async discardEphemeral(sessionId: SessionId): Promise<void> {
+    const result = await this.manager.discardEphemeral(sessionId)
+    if (!result.ok && result.error.code !== 'session-not-found') {
+      throw new Error(`discard ephemeral session failed: ${result.error.code}: ${result.error.message}`)
+    }
+    this.projectList()
   }
 
   /**
@@ -671,6 +684,7 @@ export class SessionRuntime implements ISessions {
         running: entry.running,
         ...(entry.completed ? { completed: true } : {}),
         blank: entry.blank,
+        ...(entry.ephemeral === true ? { ephemeral: true as const } : {}),
         updatedAt: entry.updatedAt,
         ...(entry.pendingInteraction === undefined
           ? {}

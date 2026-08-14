@@ -96,6 +96,12 @@ export interface SessionHeader {
    * would replay history the model can no longer act on.
    */
   readonly agentPreset?: string
+  /**
+   * Runtime-only Session that must never be written by persistence. Ephemeral
+   * Sessions are owned by an explicit consumer handle and disappear when that
+   * handle is discarded.
+   */
+  readonly ephemeral?: true
 }
 
 /**
@@ -118,6 +124,7 @@ export interface CreateSessionOptions {
     readonly origin?: 'subagent'
     readonly delegationDepth?: number
     readonly agentPreset?: string
+    readonly ephemeral?: true
   }
 }
 

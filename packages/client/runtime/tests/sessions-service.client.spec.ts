@@ -564,6 +564,26 @@ describe('fork', () => {
     expect(b.api.callsOf('session.fork')).toEqual([{ sessionId: 'source', atSeq: 41 }])
   })
 
+  it('creates and discards an ephemeral fork without applying a title policy', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 'source', cwd: '/work' }])
+    b.api.onFork = () => Promise.resolve(ok({ sessionId: sid('temporary-child') }))
+
+    await expect(b.svc.fork({
+      sessionId: sid('source'), atSeq: 7, ephemeral: true,
+    })).resolves.toBe('temporary-child')
+    expect(b.api.callsOf('session.fork')).toEqual([{
+      sessionId: 'source', atSeq: 7, ephemeral: true,
+    }])
+    expect(b.svc.list.getSnapshot().byId[sid('temporary-child')]).toMatchObject({ ephemeral: true })
+
+    await b.svc.discardEphemeral(sid('temporary-child'))
+    expect(b.api.callsOf('session.cancel')).toContainEqual({
+      sessionId: 'temporary-child', discardEphemeral: true,
+    })
+    expect(b.svc.list.getSnapshot().byId[sid('temporary-child')]).toBeUndefined()
+  })
+
   it('does not rename without the title policy or a durable source title', async () => {
     const b = bench()
     await feedList(b, [{ id: 'source', cwd: '/work' }])

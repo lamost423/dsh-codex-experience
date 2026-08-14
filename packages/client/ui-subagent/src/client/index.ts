@@ -64,7 +64,10 @@ export function apply(ctx: ClientContext): void {
   const childLabels = (session: ClientSessionContext, query: string): string[] => {
     const { byId } = sessions.list.getSnapshot()
     return Object.values(byId)
-      .filter(child => child.parentId === session.sessionId && child.running && child.displayTitle.includes(query))
+      .filter(child => child.parentId === session.sessionId
+        && child.ephemeral !== true
+        && child.running
+        && child.displayTitle.includes(query))
       .map(child => child.displayTitle)
   }
   const source: InputTriggerSource = {

@@ -186,6 +186,7 @@ export class TestSessions implements ISessions {
   readonly calls: {
     method: 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
       | 'clear' | 'search' | 'fork'
+      | 'discardEphemeral'
     args: unknown[]
   }[] = []
 
@@ -484,9 +485,15 @@ export class TestSessions implements ISessions {
    * @param opts - source session id, optional cut anchor, and client title policy.
    * @returns the source id (no child record is created).
    */
-  fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean }): Promise<SessionId> {
+  fork(opts: { sessionId: SessionId; atSeq?: number; increaseTitle?: boolean; ephemeral?: true }): Promise<SessionId> {
     this.calls.push({ method: 'fork', args: [opts] })
     return Promise.resolve(opts.sessionId)
+  }
+
+  /** Recorded ephemeral-discard stub. */
+  discardEphemeral(sessionId: SessionId): Promise<void> {
+    this.calls.push({ method: 'discardEphemeral', args: [sessionId] })
+    return Promise.resolve()
   }
 
   /**

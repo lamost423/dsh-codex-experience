@@ -132,6 +132,9 @@ function validateSessionHeader(id: SessionId, input: unknown): SessionHeader {
   if (record.agentPreset !== undefined && typeof record.agentPreset !== 'string') {
     throw new Error('session header agentPreset must be a string')
   }
+  if (record.ephemeral !== undefined && record.ephemeral !== true) {
+    throw new Error('session header ephemeral must be true')
+  }
   return deepFreeze(record as unknown as SessionHeader)
 }
 
@@ -143,7 +146,11 @@ function validateRestoredSessionHeader(id: SessionId, input: unknown): SessionHe
       throw new Error('session header is not a plain JSON record')
     }
   }
-  return validateSessionHeader(id, input)
+  const header = validateSessionHeader(id, input)
+  if (header.ephemeral === true) {
+    throw new Error('persisted session header must not be ephemeral')
+  }
+  return header
 }
 
 /** Detach, validate, and freeze the creation metadata published by a session. */
@@ -884,6 +891,7 @@ export class SessionStore extends Service {
       ...meta?.origin === undefined ? {} : { origin: meta.origin },
       ...meta?.delegationDepth === undefined ? {} : { delegationDepth: meta.delegationDepth },
       ...meta?.agentPreset === undefined ? {} : { agentPreset: meta.agentPreset },
+      ...meta?.ephemeral === undefined ? {} : { ephemeral: meta.ephemeral },
     }
     return Session.create(sessionId, seed, header)
   }

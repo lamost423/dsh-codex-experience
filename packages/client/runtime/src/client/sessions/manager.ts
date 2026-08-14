@@ -578,13 +578,14 @@ export class SessionManager {
    * @returns the fork result (the child session id).
    */
   async fork(
-    opts: { sessionId: SessionId; atSeq?: number },
+    opts: { sessionId: SessionId; atSeq?: number; ephemeral?: true },
   ): Promise<RpcResult<{ sessionId: SessionId }>> {
     try {
       const source = this.summaries.find(s => s.sessionId === opts.sessionId)
       const { result } = await this.api.sessions.fork({
         sessionId: opts.sessionId,
         ...opts.atSeq === undefined ? {} : { atSeq: opts.atSeq },
+        ...opts.ephemeral === true ? { ephemeral: true as const } : {},
       })
       const childId = result.ok
         ? result.value.sessionId
@@ -592,12 +593,28 @@ export class SessionManager {
       if (childId !== undefined) {
         this.recordMutation({ kind: 'upsert', summary: {
           sessionId: childId, updatedAt: Date.now(), running: false, blank: false,
+          ...opts.ephemeral === true ? { ephemeral: true as const } : {},
           parentSessionId: opts.sessionId,
           ...(source?.cwd !== undefined ? { cwd: source.cwd } : {}),
         } })
       }
       return result
     } catch (error) {
+      return transportError(error)
+    }
+  }
+
+  /**
+   * Ask the Host to destroy one runtime-only fork and remove it locally on acceptance.
+   * @param sessionId - Ephemeral child Session to discard.
+   * @returns Host acceptance or a typed transport/application failure.
+   */
+  async discardEphemeral(sessionId: SessionId): Promise<RpcResult<{ accepted: true }>> {
+    try {
+      const { result } = await this.api.sessions.cancel({ sessionId, discardEphemeral: true })
+      if (result.ok) this.recordMutation({ kind: 'remove', sessionId })
+      return result
+    } catch (error: unknown) {
       return transportError(error)
     }
   }
@@ -800,6 +817,7 @@ export class SessionManager {
           sessionId: frame.sessionId, updatedAt: Date.now(), running: false, blank: frame.blank,
           ...(frame.parentSessionId !== undefined ? { parentSessionId: frame.parentSessionId } : {}),
           ...(frame.origin !== undefined ? { origin: frame.origin } : {}),
+          ...(frame.ephemeral === true ? { ephemeral: true as const } : {}),
           ...(frame.cwd !== undefined ? { cwd: frame.cwd } : {}),
           ...(frame.agentPreset !== undefined ? { agentPreset: frame.agentPreset } : {}),
         })
@@ -1092,6 +1110,8 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
           ? { parentSessionId: mutation.summary.parentSessionId } : {}),
         ...(existing.origin === undefined && mutation.summary.origin !== undefined
           ? { origin: mutation.summary.origin } : {}),
+        ...(existing.ephemeral !== true && mutation.summary.ephemeral === true
+          ? { ephemeral: true as const } : {}),
         // Newest wins, not fill-only: a blank-session preset switch replaces
         // the creation-time value, and every producer of this field (the
         // create echo, the select echo, a list row) reports the CURRENT one.
@@ -1099,7 +1119,7 @@ function applyMutation(summaries: readonly SessionSummary[], mutation: SessionLi
           ? { agentPreset: mutation.summary.agentPreset } : {}),
       }
       if (filled.cwd === existing.cwd && filled.parentSessionId === existing.parentSessionId
-        && filled.origin === existing.origin && filled.blank === existing.blank
+        && filled.origin === existing.origin && filled.ephemeral === existing.ephemeral && filled.blank === existing.blank
         && filled.agentPreset === existing.agentPreset) return [...summaries]
       return summaries.map(summary => summary.sessionId === mutation.summary.sessionId ? filled : summary)
     }

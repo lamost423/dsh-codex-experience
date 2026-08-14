@@ -38,12 +38,20 @@ function transcript(snapshot: ConversationSnapshot | null): TranscriptRow[] {
 }
 
 /** Compact child transcript and composer hosted in the details column. */
-export function SideChatPanel({ useSideChat, send, close, t }: SideChatPanelProps) {
+export function SideChatPanel({ useSideChat, send, close, release, t }: SideChatPanelProps) {
   const view = useSideChat(value => value)
   const rows = useMemo(() => transcript(view.conversation), [view.conversation])
   const [draft, setDraft] = useState('')
   const [pending, setPending] = useState(false)
   const endRef = useRef<HTMLDivElement | null>(null)
+  const releaseRef = useRef(release)
+
+  releaseRef.current = release
+  useEffect(() => () => {
+    void releaseRef.current().catch((error: unknown) => {
+      console.error('[ui-side-chat] route release failed:', error)
+    })
+  }, [])
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest' }) }, [rows.length])
 

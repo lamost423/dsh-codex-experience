@@ -54,6 +54,7 @@ export const sessionSummarySchema = z.object({
   updatedAt: z.number(),
   running: z.boolean(),
   blank: z.boolean(),
+  ephemeral: z.literal(true).optional(),
   parentSessionId: sessionIdSchema.optional(),
   origin: z.literal('subagent').optional(),
   cwd: z.string().optional(),
@@ -131,6 +132,7 @@ export const sessionRenameValueSchema = z.object({
 export const sessionForkRequestSchema = z.object({
   sessionId: sessionIdSchema,
   atSeq: z.number().int().nonnegative().optional(),
+  ephemeral: z.literal(true).optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'session.fork'>>>
 
 /** session.fork response value (the child session id). */
@@ -345,6 +347,7 @@ export const sessionUpdateQueueValueSchema = z.object({
 /** session.cancel request payload. */
 export const sessionCancelRequestSchema = z.object({
   sessionId: sessionIdSchema,
+  discardEphemeral: z.literal(true).optional(),
 }) satisfies z.ZodType<Wire<RequestPayload<'session.cancel'>>>
 
 /** session.cancel response value. */

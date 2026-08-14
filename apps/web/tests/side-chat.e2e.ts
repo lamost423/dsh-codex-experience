@@ -51,7 +51,7 @@ describe('web e2e: assistant Side Chat', () => {
     await scaffold?.close()
   })
 
-  it.skipIf(MODE === 'record')('opens beside the source, keeps the fork after close, and matches its golden', async () => {
+  it.skipIf(MODE === 'record')('opens beside the source, hides the temporary fork, and discards it on close', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-side-chat'))
     const group = page.locator('[role="treeitem"]').first()
     await group.waitFor({ timeout: 15_000 })
@@ -85,6 +85,7 @@ describe('web e2e: assistant Side Chat', () => {
     const childAgent = scaffold.ctx.agents.list()
       .find(agent => agent.session.header.parentSession === SessionId(SEED_ID))
     if (childAgent === undefined) throw new Error('Side Chat child Agent is unavailable')
+    expect(childAgent.session.header.ephemeral).toBe(true)
     const childUsersBefore = userTexts(childAgent.session.events).length
     const childTurnsBefore = childAgent.session.events.filter(event => event.type === 'turn/end').length
     const composer = panel.getByRole('textbox', { name: 'Ask a follow-up…' })
@@ -117,8 +118,8 @@ describe('web e2e: assistant Side Chat', () => {
 
     await panel.getByRole('button', { name: 'Close side chat' }).click()
     await expect.poll(() => panel.count()).toBe(0)
-    expect(scaffold.ctx.agents.list()
-      .filter(agent => agent.session.header.parentSession === SessionId(SEED_ID))).toHaveLength(1)
+    await expect.poll(() => scaffold.ctx.agents.list()
+      .filter(agent => agent.session.header.parentSession === SessionId(SEED_ID)).length).toBe(0)
   }, 60_000)
 
   it.skipIf(MODE === 'record')('kept the console clean and inventory closed', async () => {

@@ -138,6 +138,9 @@ export class SessionProjectionCache extends Service {
    * @returns resolution after durability and event emission.
    */
   async write(session: Session): Promise<void> {
+    if (session.header.ephemeral === true) {
+      throw new TypeError('ephemeral sessions must not be projection-cached')
+    }
     const rows = this.ctx.sessionProjections.checkpoint(session)
     this.markClean(session)
     // Durability barrier: the checkpoint cut was taken above, so flushing
@@ -203,6 +206,7 @@ export class SessionProjectionCache extends Service {
     // mandatory point (the durable value most reads want is the turn-final
     // one), count/interval throttle the in-turn stream.
     this.ctx.on('session/event', (session: Session, event: SessionEvent) => {
+      if (session.header.ephemeral === true) return
       if (event.type === 'turn/end') {
         void this.flushSoft(session, 'turn/end')
         return
@@ -224,6 +228,11 @@ export class SessionProjectionCache extends Service {
     // flushSoft's synchronous prefix reads and resets the dirty state, so
     // dropping it (timer already cleared by markClean) right after is safe.
     this.ctx.on('session/disposed', (session: Session) => {
+      if (session.header.ephemeral === true) {
+        this.markClean(session)
+        this.dirty.delete(session)
+        return
+      }
       void this.flushSoft(session, 'detach')
       this.markClean(session)
       this.dirty.delete(session)

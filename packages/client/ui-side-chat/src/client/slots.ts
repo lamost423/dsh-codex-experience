@@ -13,10 +13,14 @@ export interface SideChatInjected {
   }
   /** Open the panel for a whole answer or a selected passage. */
   open: (target: AssistantQuoteTarget) => void
+  /** Add one answer-anchored quote to the current main composer. */
+  addToConversation: (target: AssistantQuoteTarget) => void
   /** Send a prompt to the forked child Session. */
   send: (text: string) => Promise<SideChatSendResult>
-  /** Close the details column without deleting the child Session. */
+  /** Close the details column and destroy its ephemeral child. */
   close: () => void
+  /** Destroy the ephemeral child when another details route replaces this panel. */
+  release: () => Promise<void>
 }
 
 /** Whole-answer action-strip component props. */
@@ -27,6 +31,6 @@ export type SideChatActionProps = PropsRuntime<'conversation.chat.assistant-acti
 export type SideChatSelectionProps = PropsRuntime<'conversation.chat.assistant-body-overlay'>
   & InjectFace<SideChatInjected> & PropsLocale<'sideChat'>
 
-/** Fork-backed details panel component props. */
+/** Ephemeral details panel component props. */
 export type SideChatPanelProps = PropsRuntime<'conversation.details.view'>
   & InjectFace<SideChatInjected> & PropsLocale<'sideChat'>

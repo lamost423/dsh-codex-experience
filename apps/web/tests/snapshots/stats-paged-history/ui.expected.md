@@ -13,6 +13,8 @@
 - paragraph: r1
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -24,6 +26,8 @@
   - img
 - paragraph: r2
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -37,6 +41,8 @@
 - paragraph: r3
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -48,6 +54,8 @@
   - img
 - paragraph: r4
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -61,6 +69,8 @@
 - paragraph: r5
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -72,6 +82,8 @@
   - img
 - paragraph: r6
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -85,6 +97,8 @@
 - paragraph: r7
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -96,6 +110,8 @@
   - img
 - paragraph: r8
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -109,6 +125,8 @@
 - paragraph: r9
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -120,6 +138,8 @@
   - img
 - paragraph: r10
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -133,6 +153,8 @@
 - paragraph: r11
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -144,6 +166,8 @@
   - img
 - paragraph: r12
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -157,6 +181,8 @@
 - paragraph: r13
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -168,6 +194,8 @@
   - img
 - paragraph: r14
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -181,6 +209,8 @@
 - paragraph: r15
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -192,6 +222,8 @@
   - img
 - paragraph: r16
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -205,6 +237,8 @@
 - paragraph: r17
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -216,6 +250,8 @@
   - img
 - paragraph: r18
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -229,6 +265,8 @@
 - paragraph: r19
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -240,6 +278,8 @@
   - img
 - paragraph: r20
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -253,6 +293,8 @@
 - paragraph: r21
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -264,6 +306,8 @@
   - img
 - paragraph: r22
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -277,6 +321,8 @@
 - paragraph: r23
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -288,6 +334,8 @@
   - img
 - paragraph: r24
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -301,6 +349,8 @@
 - paragraph: r25
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -312,6 +362,8 @@
   - img
 - paragraph: r26
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
@@ -325,6 +377,8 @@
 - paragraph: r27
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -336,6 +390,8 @@
   - img
 - paragraph: r28
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img
