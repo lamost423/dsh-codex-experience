@@ -1,0 +1,56 @@
+name: Community CI
+
+on:
+  push:
+    branches: [codex-experience]
+    tags: ['v*-community.*']
+  pull_request:
+    branches: [codex-experience]
+  workflow_dispatch:
+
+concurrency:
+  group: community-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  verify:
+    name: build, contracts, and focused tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Test Side Chat and todo freshness Guard
+        run: pnpm exec vitest run packages/client/ui-side-chat packages/guard/todo-freshness-guard
+
+      - name: Verify documentation contracts
+        run: pnpm run doc-sync
+
+      - name: Build source distribution
+        run: pnpm run build
