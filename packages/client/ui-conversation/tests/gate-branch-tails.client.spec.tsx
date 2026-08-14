@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import {
   createSnapshotStore, EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS,
@@ -15,7 +15,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import { createChatStore } from '../src/client/stores.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { StatsLine } from '../src/client/chat/StatsLine.tsx'
-import { DetailsPanel } from '../src/client/skeleton/DetailsPanel.tsx'
+import { DetailsPanel, DetailsRouter } from '../src/client/skeleton/DetailsPanel.tsx'
 import { zh } from '../src/client/locales.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
@@ -58,6 +58,16 @@ function snapshotBase(): ConversationSnapshot {
 }
 
 describe('render branch tails', () => {
+  it('closes a details route whose keyed contribution disappeared', async () => {
+    const closeDetails = vi.fn()
+    render(<DetailsRouter {...({
+      view: 'missing-plugin-route',
+      closeDetails,
+      renderSlot: (_key: string, _owner: object, options?: { fallback?: React.ReactNode }) => options?.fallback,
+    } as unknown as DetailsSlotProps)} />)
+    await waitFor(() => { expect(closeDetails).toHaveBeenCalledOnce() })
+  })
+
   it('AssistantMarkdown reasoning row is ok-state when not the streaming tail', () => {
     const view = render(
       <AssistantMarkdown

@@ -20,7 +20,13 @@ import {
  * `narrowExpanded` is the manual override that re-expands the auto-collapsed
  * sidebar over the squeezed center without rewriting the width preference.
  */
-type LayoutState = { sidebar: number; details: number; narrow: boolean; narrowExpanded: boolean }
+type LayoutState = {
+  sidebar: number
+  details: number
+  detailsView: string | null
+  narrow: boolean
+  narrowExpanded: boolean
+}
 
 /**
  * Annotation twin of the actions literal below (the export needs a declared
@@ -31,7 +37,7 @@ type LayoutActions = {
   setDetails: (draft: LayoutState, px: number) => void
   toggleSidebar: (draft: LayoutState) => void
   setNarrow: (draft: LayoutState, narrow: boolean) => void
-  openDetails: (draft: LayoutState) => void
+  openDetails: (draft: LayoutState, view?: string) => void
   closeDetails: (draft: LayoutState) => void
 }
 
@@ -47,7 +53,13 @@ type LayoutActions = {
  */
 export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutActions>  {
   const handle = defineStore({
-    init: (): LayoutState => ({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false }),
+    init: (): LayoutState => ({
+      sidebar: SIDEBAR_DEFAULT,
+      details: 0,
+      detailsView: null,
+      narrow: false,
+      narrowExpanded: false,
+    }),
     actions: {
       setSidebar: (d, px: number) => { d.sidebar = clampWidth(px, SIDEBAR_MIN, SIDEBAR_MAX) },
       setDetails: (d, px: number) => { d.details = clampWidth(px, DETAILS_MIN, DETAILS_MAX) },
@@ -64,8 +76,14 @@ export function createLayoutStore(): EngineStoreHandle<LayoutState, LayoutAction
         d.narrow = narrow
         d.narrowExpanded = false
       },
-      openDetails: (d) => { if (d.details === 0) d.details = DETAILS_DEFAULT },
-      closeDetails: (d) => { d.details = 0 },
+      openDetails: (d, view?: string) => {
+        d.detailsView = view ?? 'tool'
+        if (d.details === 0) d.details = DETAILS_DEFAULT
+      },
+      closeDetails: (d) => {
+        d.details = 0
+        d.detailsView = null
+      },
     },
   })
   return handle

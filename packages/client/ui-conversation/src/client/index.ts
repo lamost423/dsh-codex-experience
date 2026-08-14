@@ -28,11 +28,12 @@ export type {
   RetryChatData, ToolChatData, TurnTailChatData,
 } from './contract/chat-nodes.ts'
 export type {
-  ChatFileMentions, ChatNodeOwnerProps, ChatNodeViewProps,
+  AssistantActionOwnerProps, AssistantBodyOwnerProps, ChatFileMentions, ChatNodeOwnerProps, ChatNodeViewProps,
   ChatStore, ChatViewInjected, ChatViewSlotProps, CommandRowOwnerProps, CommandRowProps, ComposerBarInjected,
   ComposerAttachment, ComposerChainProps, ConversationInjected,
   ConversationSessionHeaderInjected, ConversationSessionInjected, ConversationSlotProps, ConvViewOwnerProps,
-  ConvViewProps, DetailsInjected, DetailsSlotProps, DetailsToolOwnerProps, EmptyWorkspaceOwnerProps,
+  ConvViewProps, DetailsInjected, DetailsSlotProps, DetailsToolOwnerProps, DetailsViewOwnerProps, EmptyWorkspaceOwnerProps,
+  ToolDetailsSlotProps,
   TurnTailOwnerProps, UseChatNodeTurnData,
 } from './contract/slots.ts'
 // Export discipline: packages/client/AGENTS.md.

@@ -17,7 +17,8 @@ import {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { RpcId } from '@deepseek-ai/dsh-client-connection/client'
 import type {
-  ChatNode, ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, SelectionTarget, UseChatNodeTurnData,
+  AssistantBodyOwnerProps, ChatNode, ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps,
+  SelectionTarget, UseChatNodeTurnData,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -180,6 +181,12 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     React.ComponentProps<typeof TurnTailNodeView>['renderSlotChain']
   const renderTurnTailSlot = (() => null) as unknown as
     React.ComponentProps<typeof TurnTailNodeView>['renderSlot']
+  const assistantOverlayOwners: AssistantBodyOwnerProps[] = []
+  const renderAssistantOverlay = ((_key: string, owner: AssistantBodyOwnerProps) => {
+    assistantOverlayOwners.push(owner)
+    return null
+  }) as unknown as
+    React.ComponentProps<typeof AssistantNodeView>['renderSlot']
   const renderSlot = ((key: string, owner: object, opts?: {
     fallback?: React.ReactNode
     hookContext?: unknown
@@ -203,7 +210,13 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
       case 'context':
         return <ContextMessageNodeView {...nodeProps<'context'>()} />
       case 'assistant-step':
-        return <AssistantNodeView {...nodeProps<'assistant-step'>()} />
+        return (
+          <AssistantNodeView
+            {...nodeProps<'assistant-step'>()}
+            renderSlot={renderAssistantOverlay}
+            SessionProvider={props.SessionProvider}
+          />
+        )
       case 'command':
         return (
           <CommandNodeView
@@ -295,7 +308,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   const setSelection = (next: SelectionTarget | null): void => { chat.actions.select(next) }
   return {
     set, ChatView, props, openDetails, openFile, loadOlder, inspectCall,
-    chatScroll, forkAt, setSelection, toolOwners,
+    chatScroll, forkAt, setSelection, toolOwners, assistantOverlayOwners,
   }
 }
 
@@ -650,6 +663,25 @@ describe('ChatView', () => {
     // turn/end lands: the same node becomes the settled answer and takes the seat.
     act(() => { h.set({ running: false, runningCalls: [], turnEnds: new Map([[1, 3], [2, 6]]) }) })
     expect(view.getAllByRole('button', { name: '复制' })).toHaveLength(4)
+  })
+
+  it('offers assistant-body overlays only on the closing message of a closed turn', () => {
+    const nodes = [
+      user(1, 'question'),
+      { ...assistant(2, 'mid-turn'), messageId: 'mid-turn-message' as never },
+      { ...assistant(5, 'final'), messageId: 'final-message' as never },
+    ]
+    const open = makeHarness({
+      running: true,
+      nodes,
+      turnEnds: new Map(),
+    })
+    render(<open.ChatView {...open.props} />)
+    expect(open.assistantOverlayOwners).toHaveLength(0)
+
+    const closed = makeHarness({ nodes, turnEnds: new Map([[1, 6]]) })
+    render(<closed.ChatView {...closed.props} />)
+    expect(closed.assistantOverlayOwners.map(owner => owner.seq)).toEqual([5])
   })
 
   it('the actions-owning assistant footer shows the turn run time', () => {

@@ -1,0 +1,31 @@
+.seat {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.action {
+  position: absolute;
+  transform: translateX(-50%);
+  min-width: max-content;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-elevated);
+  color: var(--dsw-alias-label-primary);
+  box-shadow: var(--dsw-alias-shadow-popover);
+  font: var(--dsw-font-xs-13);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.action:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-focus);
+  outline-offset: 1px;
+}

@@ -92,9 +92,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [],
       },
       {
-        signature: 'openDetails(): void',
-        description: 'Open the details panel (no-op when already open).',
-        parameters: [],
+        signature: 'openDetails(view?: string): void',
+        description: 'Open the details panel or switch its keyed renderer while preserving width.',
+        parameters: [{ name: 'view', description: 'keyed details renderer; defaults to the Tool view.' }],
       },
       {
         signature: 'closeDetails(): void',

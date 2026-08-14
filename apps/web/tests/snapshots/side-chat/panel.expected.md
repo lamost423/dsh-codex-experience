@@ -1,0 +1,9 @@
+- banner:
+  - strong: Side chat
+  - button "Close side chat": ×
+- complementary:
+  - text: Quoted from the main conversation
+  - paragraph: DONE
+- paragraph: Ask a question without changing the main conversation.
+- textbox "Ask a follow-up…"
+- button "Send" [disabled]

@@ -75,7 +75,7 @@ async function bench() {
   // The host face (store resolution) exists only inside the installed
   // renderer, so materialize it the way the shell does.
   runtime.renderRoot()
-  const entryOf = (key: 'conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar' | 'conversation.view' | 'details') =>
+  const entryOf = (key: 'conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar' | 'conversation.view' | 'conversation.details.view' | 'details') =>
     runtime.slots.entries(key)[0]!
   /** Resolve store instance + call the inject the way the outlet would. */
   const conversationApi = (id: SessionId) => {
@@ -338,14 +338,14 @@ describe('conversation slot inject API', () => {
 describe('details inject API', () => {
   it('details injects the one layout callback; selection rides the shared store instead', async () => {
     const b = await bench()
-    const entry = b.entryOf('details')
+    const entry = b.entryOf('conversation.details.view')
     const injected = (entry.inject as unknown as () => DetailsInjected)()
     expect(Object.keys(injected)).toEqual(['closeDetails'])
     injected.closeDetails()
     expect(b.layoutFake.closeDetails).toHaveBeenCalledTimes(1)
     // The shared handle: details resolves the SAME instance conversation writes.
     const conv = b.runtime.storeOf('conversation.session', ROOT)
-    const details = b.runtime.storeOf('details', ROOT)
+    const details = b.runtime.storeOf('conversation.details.view', ROOT)
     expect(details).toBe(conv)
     await b.runtime.dispose()
   })

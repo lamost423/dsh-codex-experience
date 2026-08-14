@@ -66,8 +66,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * inside it — registering here replaces the column and takes that seat
      * with it. Absent an occupant the column renders nothing.
      *
-     * No owner props: the framework injects the session id and hooks for the
-     * `session` scope, and `ctx.layout` owns whether the column is open.
+     * The owner receives the active route while the framework injects the
+     * session id and hooks for the `session` scope.
      */
     'details': { kind: 'single'; scope: 'session'; owner: DetailsOwnerProps }
     /**
@@ -101,8 +101,11 @@ export interface SidebarOwnerProps {
 /** Conversation owner share: business state and actions belong to the registrant. */
 export interface ConvOwnerProps {}
 
-/** Details owner share: empty — sessionId arrives as a framework-standard prop. */
-export interface DetailsOwnerProps {}
+/** Details owner share: the route selected through `ctx.layout`. */
+export interface DetailsOwnerProps {
+  /** Active details renderer key; null while the panel is closed. */
+  view: string | null
+}
 
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
 export const inject = ['slots', 'theme']

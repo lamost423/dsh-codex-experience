@@ -6,16 +6,30 @@
 // share the store seat exists for) and derives the call material from the
 // session snapshot — no data of its own.
 
-import { Fragment } from 'react'
+import { Fragment, useEffect } from 'react'
 import { CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
 import { shallowEqual } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ConversationSnapshot, RunningToolCall, ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
-import type { DetailsSlotProps } from '../contract/slots.ts'
+import type { DetailsSlotProps, ToolDetailsSlotProps } from '../contract/slots.ts'
 import { findToolCall } from '../chat/tool-node-reader.ts'
 import css from './DetailsPanel.module.css'
 
 /** Full props composed by reference from the contract (automatic shares & injected share). */
-export type DetailsPanelProps = DetailsSlotProps
+export type DetailsRouterProps = DetailsSlotProps
+
+function MissingDetailsRoute({ closeDetails }: Pick<DetailsRouterProps, 'closeDetails'>) {
+  useEffect(() => { closeDetails() }, [closeDetails])
+  return null
+}
+
+/** Route the shell-selected details key to one independently registered view. */
+export function DetailsRouter({ view, renderSlot, closeDetails }: DetailsRouterProps) {
+  if (view === null) return null
+  return renderSlot('conversation.details.view', {}, {
+    entryKey: view,
+    fallback: <MissingDetailsRoute closeDetails={closeDetails} />,
+  })
+}
 
 /**
  * Selected call material: the call's display name and args plus the frozen
@@ -63,7 +77,11 @@ function rawResultText(block: ToolCallBlock): string {
   return parts.join('\n')
 }
 
-export function DetailsPanel({ useSession, useSessions, sessionId, useStore, renderSlot, closeDetails, t }: DetailsPanelProps) {
+export type DetailsPanelProps = ToolDetailsSlotProps
+
+export function DetailsPanel({
+  useSession, useSessions, sessionId, useStore, renderSlot, closeDetails, t,
+}: DetailsPanelProps) {
   const selection = useStore(s => s.selection)
   // Session workspace root: an omitted or relative terminal cwd resolves
   // against it, which the pure presenter cannot see.

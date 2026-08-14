@@ -34,7 +34,7 @@ import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { queueDockEntry } from './queue/QueueDock.tsx'
 import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
-import { DetailsPanel } from './skeleton/DetailsPanel.tsx'
+import { DetailsPanel, DetailsRouter } from './skeleton/DetailsPanel.tsx'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { registerConversationNodes } from './conversation-nodes/register.ts'
 import { registerChatNodeRenderers } from './chat/register-node-renderers.ts'
@@ -389,7 +389,7 @@ export function apply(ctx: Context): void {
       return {
         openDetails: (target) => {
           actions.select(target)
-          layout.openDetails()
+          layout.openDetails('tool')
         },
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
         openFile: (path) => {
@@ -443,6 +443,17 @@ export function apply(ctx: Context): void {
 
   slots.register({
     name: 'details',
+    children: {
+      'conversation.details.view': { kind: 'keyed', scope: 'session' },
+    },
+    inject: (): DetailsInjected => ({
+      closeDetails: () => { layout.closeDetails() },
+    }),
+  }, DetailsRouter)
+
+  slots.inject('conversation.details.view', () => slots.register({
+    name: 'conversation.details.view',
+    key: 'tool',
     locale: NS,
     children: {
       'conversation.details.tool': { kind: 'single', scope: 'session' },
@@ -451,6 +462,6 @@ export function apply(ctx: Context): void {
     inject: (): DetailsInjected => ({
       closeDetails: () => { layout.closeDetails() },
     }),
-  }, DetailsPanel)
+  }, DetailsPanel))
 
 }

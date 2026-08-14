@@ -112,6 +112,18 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       owner: AssistantActionOwnerProps
     }
     /**
+     * Additive decoration layer inside one settled assistant body's positioned
+     * boundary. Entries may interpret selection or render anchored controls;
+     * the conversation package supplies identity and text but no policy.
+     */
+    'conversation.chat.assistant-body-overlay': {
+      kind: 'list'
+      scope: 'session'
+      owner: AssistantBodyOwnerProps
+    }
+    /** Keyed router for the right details column. */
+    'conversation.details.view': { kind: 'keyed'; scope: 'session'; owner: DetailsViewOwnerProps }
+    /**
      * The body of the details panel for the tool call the user selected —
      * one occupant, so taking it means rendering every tool's output, not just
      * the ones you know. The owner passes a frozen `block` whose two lifecycle
@@ -338,7 +350,17 @@ export interface TurnTailOwnerProps {
 export interface AssistantActionOwnerProps {
   /** Stable identity carried from the `assistant/message` event. */
   messageId: MessageId
+  /** Finalized event sequence used as a stable fork boundary anchor. */
+  seq: number
+  /** Plain text of the finalized assistant answer. */
+  text: string
 }
+
+/** Owner currency for decorations anchored to one settled assistant body. */
+export interface AssistantBodyOwnerProps extends AssistantActionOwnerProps {}
+
+/** Empty keyed details-view currency; the route key selects the renderer. */
+export interface DetailsViewOwnerProps {}
 
 /** Hook constrained to business data published on the current Chat Node's Turn. */
 export type UseChatNodeTurnData = <Key extends Extract<keyof ConversationTurnDataMap, string>>(
@@ -721,8 +743,13 @@ export interface DetailsInjected {
   closeDetails: () => void
 }
 
-/** Full details-slot props: selection store, Tool output seat, injected close callback, and locale. */
-export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.tool'>
+/** Full details-router props: keyed view seat plus layout-owned close recovery. */
+export type DetailsSlotProps = PropsRuntime<'details'>
+  & PropsRenderSlots<'conversation.details.view'> & DetailsInjected
+
+/** Full Tool-details entry props behind the keyed details router. */
+export type ToolDetailsSlotProps = PropsRuntime<'conversation.details.view'>
+  & PropsRenderSlots<'conversation.details.tool'>
   & PropsStore<ChatStore> & DetailsInjected & PropsLocale<'conversation'>
 
 /** Owner share common to the hero / New-Session Workspace pickers. */

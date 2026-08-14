@@ -19,7 +19,9 @@ beforeEach(() => { localStorage.clear() })
 describe('createLayoutStore', () => {
   it('initializes the sidebar at its default width, details closed, wide viewport assumed', () => {
     const { store } = createLayoutStore().create()
-    expect(store.getSnapshot()).toEqual({ sidebar: SIDEBAR_DEFAULT, details: 0, narrow: false, narrowExpanded: false })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: SIDEBAR_DEFAULT, details: 0, detailsView: null, narrow: false, narrowExpanded: false,
+    })
   })
 
   it('each create() is an independent instance (factory is not a singleton)', () => {
@@ -55,7 +57,9 @@ describe('createLayoutStore', () => {
     actions.setSidebar(400)
     actions.setNarrow(true)
     actions.toggleSidebar()
-    expect(store.getSnapshot()).toEqual({ sidebar: 400, details: 0, narrow: true, narrowExpanded: true })
+    expect(store.getSnapshot()).toEqual({
+      sidebar: 400, details: 0, detailsView: null, narrow: true, narrowExpanded: true,
+    })
     actions.toggleSidebar()
     expect(store.getSnapshot().narrowExpanded).toBe(false)
     expect(store.getSnapshot().sidebar).toBe(400)
@@ -76,13 +80,15 @@ describe('createLayoutStore', () => {
 
   it('openDetails uses the contract default, preserves an open width, and closeDetails zeroes', () => {
     const { store, actions } = createLayoutStore().create()
-    actions.openDetails()
+    actions.openDetails('side-chat')
     expect(store.getSnapshot().details).toBe(DETAILS_DEFAULT)
+    expect(store.getSnapshot().detailsView).toBe('side-chat')
     actions.setDetails(500)
     actions.openDetails()
     expect(store.getSnapshot().details).toBe(500)
     actions.closeDetails()
     expect(store.getSnapshot().details).toBe(0)
+    expect(store.getSnapshot().detailsView).toBeNull()
   })
 
   it('does not persist panel geometry', () => {
@@ -96,6 +102,7 @@ describe('createLayoutStore', () => {
     expect(second.store.getSnapshot()).toEqual({
       sidebar: SIDEBAR_DEFAULT,
       details: 0,
+      detailsView: null,
       narrow: false,
       narrowExpanded: false,
     })

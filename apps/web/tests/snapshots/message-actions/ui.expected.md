@@ -18,6 +18,8 @@
 - paragraph: I will read both files before answering.
 - button "Copy":
   - img
+- button "Side chat":
+  - img
 - button "Good response":
   - img
 - button "Bad response":
@@ -44,6 +46,8 @@
   - img
 - paragraph: DONE
 - button "Copy":
+  - img
+- button "Side chat":
   - img
 - button "Good response":
   - img

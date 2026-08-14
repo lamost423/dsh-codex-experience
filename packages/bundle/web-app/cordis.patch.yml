@@ -246,6 +246,11 @@
     - id: ui-message-feedback
       name: '@deepseek-ai/dsh-client-ui-message-feedback'
 
+    # Assistant quote annotations and a fork-backed conversation in the
+    # keyed right-details column.
+    - id: ui-side-chat
+      name: '@deepseek-ai/dsh-client-ui-side-chat'
+
     # Model selection: the /model popupSelect + composer seat over session.models.
     - id: ui-model-selection
       name: '@deepseek-ai/dsh-client-ui-model-selection'

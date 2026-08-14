@@ -151,7 +151,7 @@ describe('AppFrame', () => {
     expect(keys).toContain('details')
     expect(keys).not.toContain('conversation.empty')
     expect(slotCalls.find(c => c.key === 'conversation')!.props).toEqual({})
-    expect(slotCalls.find(c => c.key === 'details')!.props).toEqual({})
+    expect(slotCalls.find(c => c.key === 'details')!.props).toEqual({ view: null })
   })
 
   it('keeps the conversation slot mounted while no session is current', () => {
