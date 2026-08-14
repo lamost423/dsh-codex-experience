@@ -155,13 +155,34 @@ function TurnMaxTokensItem({ t }: {
  * compose time, so shape alone decorates).
  */
 function projectUserText(text: string): ReactNode {
-  const re = /(^|\s)([/@][\w-]+)(?=\s|$)/g
+  const re = /\[([^\]\r\n]+)\]\(#dsh-message-(\d+)\)|(^|\s)([/@][\w-]+)(?=\s|$)/g
   const parts: ReactNode[] = []
   let cursor = 0
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
-    const tokenStart = m.index + (m[1]?.length ?? 0)
-    const label = m[2] ?? ''
+    const annotationLabel = m[1]
+    const annotationSeq = m[2]
+    if (annotationLabel !== undefined && annotationSeq !== undefined) {
+      if (m.index > cursor) parts.push(<MessageText key={cursor} text={text.slice(cursor, m.index)} />)
+      parts.push(
+        <a
+          key={`annotation:${annotationSeq}:${m.index}`}
+          className={css.annotationLink}
+          href={`#dsh-message-${annotationSeq}`}
+          data-answer-annotation={annotationSeq}
+          onClick={(event) => {
+            event.preventDefault()
+            window.location.hash = `dsh-message-${annotationSeq}`
+          }}
+        >
+          {annotationLabel}
+        </a>,
+      )
+      cursor = m.index + m[0].length
+      continue
+    }
+    const tokenStart = m.index + (m[3]?.length ?? 0)
+    const label = m[4] ?? ''
     if (tokenStart > cursor) parts.push(<MessageText key={cursor} text={text.slice(cursor, tokenStart)} />)
     parts.push(
       <span key={tokenStart} className={css.refChip} data-ref-chip={label.startsWith('@') ? 'subagent' : 'skill'}>

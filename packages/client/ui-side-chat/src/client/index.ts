@@ -4,7 +4,9 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InputTriggerSource, ReferenceInsert } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-import { SideChatController, type AssistantQuoteTarget } from './controller.ts'
+import {
+  SideChatController, type AssistantQuoteTarget, type SideChatSendResult,
+} from './controller.ts'
 import { SideChatAction } from './SideChatAction.tsx'
 import { SideChatSelection } from './SideChatSelection.tsx'
 import { SideChatPanel } from './SideChatPanel.tsx'
@@ -20,6 +22,28 @@ export type {
 export type { SideChatKey } from './locales.ts'
 
 const NS = 'sideChat'
+const ANNOTATION_LIMIT = 4_000
+const ANNOTATION_LABEL_LIMIT = 80
+
+function annotationReference(target: AssistantQuoteTarget): ReferenceInsert | null {
+  const normalized = target.text.trim()
+  if (normalized === '') return null
+  const quote = normalized.length <= ANNOTATION_LIMIT
+    ? normalized
+    : `${normalized.slice(0, ANNOTATION_LIMIT)}…`
+  const singleLine = quote.replaceAll(/\s+/g, ' ').replaceAll(/[\[\]]/g, '')
+  const snippet = singleLine.length <= ANNOTATION_LABEL_LIMIT
+    ? singleLine
+    : `${singleLine.slice(0, ANNOTATION_LABEL_LIMIT)}…`
+  const label = `注释：${snippet}`
+  const block = `[${label}](#dsh-message-${String(target.seq)})\n\n> ${quote.replaceAll('\n', '\n> ')}`
+  return {
+    source: 'answer-annotation',
+    ref: block,
+    label,
+    clipboardText: block,
+  }
+}
 
 /** Required services for forking, slot composition, panel routing, and copy. */
 export const inject = ['slots', 'sessions', 'layout', 'locale', 'conversation', 'inputTriggers']
@@ -74,21 +98,13 @@ export function apply(ctx: ClientContext): void {
     const addToConversation = (target: AssistantQuoteTarget): void => {
       const binding = ctx.sessions.binding(sessionId)
       if (binding === undefined) throw new Error(`ui-side-chat: parent Session "${sessionId}" is not bound`)
+      const reference = annotationReference(target)
+      if (reference === null) return
       const input = ctx.conversation.input.for(binding.ctx)
-      const quote = target.text.trim().slice(0, 4_000).replaceAll('\n', '\n> ')
-      if (quote === '') return
-      const block = `> 回答注释（消息 #${String(target.seq)}）\n> ${quote}`
-      const ref = block
       const original = input.state.getSnapshot().draft
       const prefix = original.trimEnd()
       input.setDraft(prefix === '' ? '' : `${prefix}\n\n`)
       const beforeInsert = input.state.getSnapshot()
-      const reference: ReferenceInsert = {
-        source: source.name,
-        ref,
-        label: `回答注释 #${String(target.seq)}`,
-        clipboardText: block,
-      }
       const accepted = input.insertReference(reference, {
         start: beforeInsert.draft.length,
         end: beforeInsert.draft.length,
@@ -100,10 +116,31 @@ export function apply(ctx: ClientContext): void {
       }
       input.setDraft(`${input.state.getSnapshot().draft}\n\n`)
     }
+    const submitAnnotation = async (
+      target: AssistantQuoteTarget,
+      text: string,
+    ): Promise<SideChatSendResult> => {
+      const comment = text.trim()
+      const reference = annotationReference(target)
+      if (comment === '' || reference === null) return { ok: false, error: 'empty-message' }
+      const binding = ctx.sessions.binding(sessionId)
+      if (binding === undefined) return { ok: false, error: `parent Session "${sessionId}" is not bound` }
+      try {
+        const result = await binding.session.prompt(
+          [{ type: 'text', text: `${reference.ref}\n\n${comment}` }],
+          'queue',
+        )
+        if (result.ok) return { ok: true }
+        return { ok: false, error: `${result.error.code}: ${result.error.message}` }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    }
     return {
       hooks: { sideChat: controller },
       open,
       addToConversation,
+      submitAnnotation,
       send: text => controller.send(text),
       release: () => controller.close(),
       close: () => {

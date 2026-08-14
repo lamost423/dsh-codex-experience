@@ -39,7 +39,11 @@ export const AssistantNodeView = memo(function AssistantNodeView({
   )
   const annotatable = owner !== undefined && messageId !== undefined && data.status === 'settled'
   return (
-    <div className={css.root} data-assistant-message-body={annotatable || undefined}>
+    <div
+      id={annotatable ? `dsh-message-${String(owner.seq)}` : undefined}
+      className={css.root}
+      data-assistant-message-body={annotatable || undefined}
+    >
       {body}
       {annotatable && renderSlot('conversation.chat.assistant-body-overlay', {
         messageId,

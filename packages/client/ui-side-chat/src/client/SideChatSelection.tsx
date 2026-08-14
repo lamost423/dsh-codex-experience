@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 import type { SideChatSelectionProps } from './slots.ts'
 import css from './SideChatSelection.module.css'
 
@@ -67,19 +68,67 @@ function listen(boundary: HTMLElement, sink: SelectionSink): () => void {
 }
 
 /** Floating action shown only for a DOM selection inside its assistant body. */
-export function SideChatSelection({ seq, open, addToConversation, t }: SideChatSelectionProps) {
+export function SideChatSelection({
+  seq, open, addToConversation, submitAnnotation, t,
+}: SideChatSelectionProps) {
   const seatRef = useRef<HTMLDivElement | null>(null)
   const [selection, setSelection] = useState<SelectionState | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const editingRef = useRef(false)
+  const revisionRef = useRef(0)
+  editingRef.current = editing
+
+  const dismiss = (): void => {
+    revisionRef.current += 1
+    setSelection(null)
+    setEditing(false)
+    setDraft('')
+    setPending(false)
+    setError(null)
+    window.getSelection()?.removeAllRanges()
+  }
 
   useEffect(() => {
     const boundary = seatRef.current?.closest<HTMLElement>('[data-assistant-message-body]')
     if (boundary === null || boundary === undefined) return undefined
-    return listen(boundary, setSelection)
+    return listen(boundary, (next) => {
+      if (next === null && editingRef.current) return
+      revisionRef.current += 1
+      setSelection(next)
+      setEditing(false)
+      setDraft('')
+      setPending(false)
+      setError(null)
+    })
   }, [])
+
+  const submit = async (): Promise<void> => {
+    if (selection === null || draft.trim() === '' || pending) return
+    const ticket = revisionRef.current
+    setPending(true)
+    setError(null)
+    const result = await submitAnnotation({ seq, text: selection.text }, draft.trim())
+    if (ticket !== revisionRef.current) return
+    setPending(false)
+    if (result.ok) dismiss()
+    else setError(result.error)
+  }
+  const onSubmit = (event: FormEvent): void => {
+    event.preventDefault()
+    void submit()
+  }
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    void submit()
+  }
 
   return (
     <div ref={seatRef} className={css.seat}>
-      {selection !== null && (
+      {selection !== null && !editing && (
         <div
           className={css.toolbar}
           style={{ left: selection.left, top: selection.top }}
@@ -89,9 +138,8 @@ export function SideChatSelection({ seq, open, addToConversation, t }: SideChatS
             className={css.action}
             onPointerDown={(event) => { event.preventDefault() }}
             onClick={() => {
-              addToConversation({ seq, text: selection.text })
-              setSelection(null)
-              window.getSelection()?.removeAllRanges()
+              setEditing(true)
+              setError(null)
             }}
           >
             {t('selection.add')}
@@ -102,13 +150,50 @@ export function SideChatSelection({ seq, open, addToConversation, t }: SideChatS
             onPointerDown={(event) => { event.preventDefault() }}
             onClick={() => {
               open({ seq, text: selection.text })
-              setSelection(null)
-              window.getSelection()?.removeAllRanges()
+              dismiss()
             }}
           >
             {t('selection.open')}
           </button>
         </div>
+      )}
+      {selection !== null && editing && (
+        <form
+          className={`${css.toolbar} ${css.editor}`}
+          style={{ left: selection.left, top: selection.top }}
+          onSubmit={onSubmit}
+        >
+          <p className={css.preview}>{selection.text}</p>
+          <textarea
+            autoFocus
+            rows={3}
+            value={draft}
+            placeholder={t('selection.placeholder')}
+            disabled={pending}
+            onChange={(event) => { setDraft(event.currentTarget.value) }}
+            onKeyDown={onKeyDown}
+          />
+          {error !== null && <p className={css.error}>{t('selection.error')}: {error}</p>}
+          <div className={css.editorActions}>
+            <button type="button" className={css.action} disabled={pending} onClick={dismiss}>
+              {t('selection.cancel')}
+            </button>
+            <button
+              type="button"
+              className={css.action}
+              disabled={pending}
+              onClick={() => {
+                addToConversation({ seq, text: selection.text })
+                dismiss()
+              }}
+            >
+              {t('selection.useComposer')}
+            </button>
+            <button type="submit" className={css.primary} disabled={pending || draft.trim() === ''}>
+              {t('selection.send')}
+            </button>
+          </div>
+        </form>
       )}
     </div>
   )

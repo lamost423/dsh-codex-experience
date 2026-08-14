@@ -458,6 +458,24 @@ describe('ChatView', () => {
       ])
   })
 
+  it('renders an answer annotation as a link that jumps to its source message', () => {
+    window.location.hash = ''
+    const h = makeHarness({
+      nodes: [
+        { ...assistant(2, 'previous answer'), messageId: 'answer-message' as never },
+        user(4, '[注释：previous answer](#dsh-message-2)\n\n> previous answer\n\nexplain this'),
+      ],
+      turnEnds: new Map([[1, 3]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const link = view.getByRole('link', { name: '注释：previous answer' })
+
+    expect(link.getAttribute('href')).toBe('#dsh-message-2')
+    expect(view.container.querySelector('#dsh-message-2')?.textContent).toContain('previous answer')
+    fireEvent.click(link)
+    expect(window.location.hash).toBe('#dsh-message-2')
+  })
+
   it('renders Host-pending steering at the flow tail and hands off to the durable node', () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', {

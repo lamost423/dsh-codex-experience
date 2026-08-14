@@ -7,14 +7,24 @@ import { SideChatController } from '../src/client/controller.ts'
 const sid = (value: string): SessionId => value as SessionId
 
 function bench() {
-  const conversation = { marker: 'child' } as unknown as ConversationSnapshot
+  let conversation = {
+    marker: 'child',
+    openState: 'open',
+    openError: null,
+    chat: {
+      order: ['seed'],
+      nodes: { get: () => ({ anchorSeq: 1 }), values: () => [] },
+    },
+  } as unknown as ConversationSnapshot
   let listener: (() => void) | null = null
   const off = vi.fn()
+  const open = vi.fn<SessionFace['open']>().mockResolvedValue(undefined)
   const prompt = vi.fn<SessionFace['prompt']>().mockResolvedValue({ ok: true, value: { accepted: true } })
   const child = {
     sessionId: sid('child'),
     getSnapshot: () => conversation,
     subscribe: (next: () => void) => { listener = next; return off },
+    open,
     prompt,
     readAttachment: vi.fn(),
     updateQueue: vi.fn(),
@@ -35,7 +45,20 @@ function bench() {
     binding,
   } as unknown as ISessions
   const controller = new SideChatController(sessions, sid('parent'))
-  return { controller, fork, discardEphemeral, binding, prompt, off, emit: () => { listener?.() } }
+  const setConversation = (patch: Partial<ConversationSnapshot>) => {
+    conversation = { ...conversation, ...patch }
+  }
+  return {
+    controller,
+    fork,
+    discardEphemeral,
+    binding,
+    open,
+    prompt,
+    off,
+    setConversation,
+    emit: () => { listener?.() },
+  }
 }
 
 function failedPrompt(code = 'rejected', message = 'try again') {
@@ -49,6 +72,51 @@ describe('SideChatController', () => {
     expect(await b.controller.send(' plain question ')).toEqual({ ok: true })
     expect(b.fork).toHaveBeenCalledWith({ sessionId: 'parent', ephemeral: true })
     expect(b.prompt).toHaveBeenCalledWith([{ type: 'text', text: 'plain question' }], 'queue')
+  })
+
+  it('opens the child before prompting and hides the inherited fork transcript', async () => {
+    const b = bench()
+    let finishOpen: (() => void) | undefined
+    b.open.mockImplementationOnce(() => new Promise<void>((resolve) => { finishOpen = resolve }))
+    const sending = b.controller.send('question')
+
+    await vi.waitFor(() => { expect(b.open).toHaveBeenCalledOnce() })
+    expect(b.prompt).not.toHaveBeenCalled()
+    finishOpen?.()
+    expect(await sending).toEqual({ ok: true })
+    expect(b.controller.getSnapshot().conversation?.chat.order).toEqual([])
+
+    const current = b.controller.getSnapshot().conversation
+    if (current === null) throw new Error('expected an opened child snapshot')
+    b.setConversation({
+      chat: {
+        ...current.chat,
+        order: ['side-user', 'seed'],
+        nodes: {
+          get: key => ({ anchorSeq: key === 'side-user' ? 2 : 3 }) as never,
+          values: () => [],
+        },
+      },
+    })
+    b.emit()
+    expect(b.controller.getSnapshot().conversation?.chat.order).toEqual(['side-user', 'seed'])
+  })
+
+  it('discards a child whose conversation window cannot be opened', async () => {
+    const rejected = bench()
+    rejected.open.mockRejectedValueOnce(new Error('history unavailable'))
+    rejected.controller.open({ seq: 1, text: 'answer' })
+    await vi.waitFor(() => { expect(rejected.controller.getSnapshot()).toMatchObject({ phase: 'error', error: 'history unavailable' }) })
+    expect(rejected.discardEphemeral).toHaveBeenCalledWith(sid('child'))
+
+    const errored = bench()
+    errored.setConversation({
+      openState: 'error',
+      openError: { code: 'internal', message: 'history rejected', details: {} },
+    })
+    errored.controller.open({ seq: 2, text: 'answer' })
+    await vi.waitFor(() => { expect(errored.controller.getSnapshot().error).toBe('side chat child history failed to open: internal: history rejected') })
+    expect(errored.discardEphemeral).toHaveBeenCalledWith(sid('child'))
   })
 
   it('bounds an oversized quote before delivery', async () => {

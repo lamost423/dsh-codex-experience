@@ -33,6 +33,11 @@ export interface ISession {
   /** Host-computed projection values by key (the useProjection seat). */
   readonly projections: ProjectionsFace
   /**
+   * Hydrate the latest conversation window and begin accepting live events.
+   * This does not select the session or navigate the owning surface.
+   */
+  open(): Promise<void>
+  /**
    * Send a prompt into the session.
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.

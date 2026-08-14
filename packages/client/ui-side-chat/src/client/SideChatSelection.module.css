@@ -9,8 +9,10 @@
   position: absolute;
   transform: translateX(-50%);
   display: flex;
+  gap: 4px;
   min-width: max-content;
-  height: 30px;
+  height: 34px;
+  padding: 2px;
   border: 1px solid var(--dsw-alias-border-secondary);
   border-radius: 8px;
   background: var(--dsw-alias-bg-elevated);
@@ -21,16 +23,12 @@
 
 .action {
   padding: 0 10px;
-  border: 0;
-  border-right: 1px solid var(--dsw-alias-border-secondary);
-  background: transparent;
+  border: 1px solid var(--dsw-alias-border-secondary);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-elevated);
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xs-13);
   cursor: pointer;
-}
-
-.action:last-child {
-  border-right: 0;
 }
 
 .action:hover {
@@ -40,4 +38,74 @@
 .action:focus-visible {
   outline: 2px solid var(--dsw-alias-border-focus);
   outline-offset: 1px;
+}
+
+.editor {
+  display: grid;
+  width: min(340px, calc(100vw - 32px));
+  height: auto;
+  padding: 10px;
+  gap: 8px;
+  overflow: visible;
+}
+
+.preview {
+  max-height: 48px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  line-height: 18px;
+}
+
+.editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-primary);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-sm-14);
+  line-height: 20px;
+}
+
+.editor textarea:focus-visible {
+  outline: 2px solid var(--dsw-alias-border-focus);
+  outline-offset: 1px;
+}
+
+.editorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.editorActions .action,
+.primary {
+  height: 30px;
+}
+
+.primary {
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-interactive-bg-primary);
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-primary);
+  color: var(--dsw-alias-label-inverse);
+  font: var(--dsw-font-xs-13);
+  cursor: pointer;
+}
+
+.primary:disabled,
+.action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.error {
+  margin: 0;
+  color: var(--dsw-alias-label-error);
+  font: var(--dsw-font-xs-13);
 }

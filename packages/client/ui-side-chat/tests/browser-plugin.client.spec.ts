@@ -28,14 +28,17 @@ async function bench() {
   await sessionFiber.await()
   const fork = vi.fn().mockResolvedValue('child')
   const discardEphemeral = vi.fn().mockResolvedValue(undefined)
+  const prompt = vi.fn().mockResolvedValue({ ok: true, value: { accepted: true } })
   const childSession = {
-    getSnapshot: () => ({ chat: { order: [], nodes: new Map() } }),
+    getSnapshot: () => ({ openState: 'open', openError: null, chat: { order: [], nodes: new Map() } }),
     subscribe: () => () => {},
-    prompt: vi.fn().mockResolvedValue({ ok: true, value: { accepted: true } }),
+    open: vi.fn().mockResolvedValue(undefined),
+    prompt,
   }
   ctx.provide('sessions', {
     fork,
     discardEphemeral,
+    prompt,
     binding: (sessionId: SessionId) => !bindingEnabled || sessionCtx === undefined
       ? undefined
       : { sessionId, session: childSession, ctx: sessionCtx },
@@ -70,6 +73,7 @@ async function bench() {
     layout,
     fork,
     discardEphemeral,
+    prompt,
     setInsertAccepted: (accepted: boolean) => { insertAccepted = accepted },
     setCurrentDraft: (value: string) => { draft = value; draftRev += 1 },
     setBindingEnabled: (enabled: boolean) => { bindingEnabled = enabled },
@@ -141,8 +145,8 @@ describe('ui-side-chat browser plugin', () => {
 
     expect(b.insertReference).toHaveBeenCalledWith(expect.objectContaining({
       source: 'answer-annotation',
-      label: '回答注释 #12',
-      clipboardText: '> 回答注释（消息 #12）\n> selected\n> answer',
+      label: '注释：selected answer',
+      clipboardText: '[注释：selected answer](#dsh-message-12)\n\n> selected\n> answer',
     }), { start: 19, end: 19, draftRev: 2 })
     expect(b.setDraft).toHaveBeenLastCalledWith('existing question\n\n￼\n\n')
 
@@ -152,6 +156,20 @@ describe('ui-side-chat browser plugin', () => {
       .resolves.toBe('annotation body')
     await expect(source?.candidates({} as never, {} as never)).resolves.toEqual([])
     expect(source?.onPick({} as never)).toBeUndefined()
+  })
+
+  it('sends an inline annotation without replacing the main composer draft', async () => {
+    const b = await bench()
+    await b.fiber.await()
+    const face = b.actionFace('parent' as SessionId)
+
+    await expect(face?.submitAnnotation({ seq: 8, text: 'selected answer' }, '  explain this  '))
+      .resolves.toEqual({ ok: true })
+    expect(b.prompt).toHaveBeenCalledWith([{
+      type: 'text',
+      text: '[注释：selected answer](#dsh-message-8)\n\n> selected answer\n\nexplain this',
+    }], 'queue')
+    expect(b.setDraft).not.toHaveBeenCalled()
   })
 
   it('keeps no annotation side store and restores the draft when insertion is rejected', async () => {

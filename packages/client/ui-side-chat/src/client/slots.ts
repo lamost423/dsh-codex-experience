@@ -15,6 +15,8 @@ export interface SideChatInjected {
   open: (target: AssistantQuoteTarget) => void
   /** Add one answer-anchored quote to the current main composer. */
   addToConversation: (target: AssistantQuoteTarget) => void
+  /** Send one answer-anchored inline annotation to the main conversation. */
+  submitAnnotation: (target: AssistantQuoteTarget, text: string) => Promise<SideChatSendResult>
   /** Send a prompt to the forked child Session. */
   send: (text: string) => Promise<SideChatSendResult>
   /** Close the details column and destroy its ephemeral child. */

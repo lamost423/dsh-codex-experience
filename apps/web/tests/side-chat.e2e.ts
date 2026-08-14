@@ -2,7 +2,8 @@
 // details view. A borrowed settled transcript supplies the final answer; the
 // scenario opens Side Chat without sending a model request, proves the main
 // Session stays selected, and pins the assembled panel accessibility tree.
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
@@ -18,7 +19,7 @@ import { newEnglishPage, saveFailureShot } from './support.ts'
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/side-chat', import.meta.url))
 const EXPECTED = join(SNAPSHOT_DIR, 'panel.expected.md')
 const SEED = fileURLToPath(new URL('./snapshots/seeded-history/seed.jsonl', import.meta.url))
-const CHILD_REPLAY = fileURLToPath(new URL('./snapshots/goal-multi-turn-actions/session.jsonl', import.meta.url))
+const BASE_REPLAY = fileURLToPath(new URL('./snapshots/live-interactions/session.jsonl', import.meta.url))
 const MODE = webSnapshotMode()
 const SEED_ID = 'side-chat-web-e2e'
 const FIRST_FOLLOW_UP = 'Explain the quoted answer in one sentence.'
@@ -30,14 +31,28 @@ function userTexts(events: readonly SessionEvent[]): string[] {
     : [])
 }
 
+function twoTurnReplay(source: string): string {
+  const [header, ...eventLines] = source.trimEnd().split('\n')
+  if (header === undefined) throw new Error('side-chat replay fixture has no header')
+  const continued = eventLines.map(line => line
+    .replace(/"seq":(\d+)/g, (_match, seq: string) => `"seq":${String(Number(seq) + 100)}`)
+    .replace(/"seq0":(\d+)/g, (_match, seq: string) => `"seq0":${String(Number(seq) + 100)}`)
+    .replaceAll('"turn":1', '"turn":2'))
+  return [header, ...eventLines, ...continued, ''].join('\n')
+}
+
 describe('web e2e: assistant Side Chat', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  let fixtureRoot: string | undefined
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ replayChildFixtures: [CHILD_REPLAY] })
+    fixtureRoot = await mkdtemp(join(tmpdir(), 'dsh-web-side-chat-'))
+    const replayFixture = join(fixtureRoot, 'session.jsonl')
+    await writeFile(replayFixture, twoTurnReplay(await readFile(BASE_REPLAY, 'utf8')))
+    scaffold = await launchWebScaffold({ replayFixture })
     await seedSession(scaffold, await readFile(SEED, 'utf8'), SEED_ID)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -49,6 +64,7 @@ describe('web e2e: assistant Side Chat', () => {
   afterAll(async () => {
     await browser?.close()
     await scaffold?.close()
+    if (fixtureRoot !== undefined) await rm(fixtureRoot, { recursive: true, force: true })
   })
 
   it.skipIf(MODE === 'record')('opens beside the source, hides the temporary fork, and discards it on close', async () => {
@@ -89,13 +105,23 @@ describe('web e2e: assistant Side Chat', () => {
     const childUsersBefore = userTexts(childAgent.session.events).length
     const childTurnsBefore = childAgent.session.events.filter(event => event.type === 'turn/end').length
     const composer = panel.getByRole('textbox', { name: 'Ask a follow-up…' })
+    const transcript = panel.locator('[aria-live="polite"]')
+    const userRows = transcript.locator('article[data-role="user"]')
+    const assistantRows = transcript.locator('article[data-role="assistant"]')
+    await expect.poll(() => userRows.count()).toBe(0)
+    await expect.poll(() => assistantRows.count()).toBe(0)
     await composer.fill(FIRST_FOLLOW_UP)
     await composer.press('Enter')
     await expect.poll(
       () => childAgent.session.events.filter(event => event.type === 'turn/end').length,
       { timeout: 30_000 },
     ).toBe(childTurnsBefore + 1)
-    const transcriptBox = await panel.locator('[aria-live="polite"]').boundingBox()
+    await expect.poll(() => userRows.count()).toBe(1)
+    await expect.poll(() => userRows.first().textContent()).toContain(FIRST_FOLLOW_UP)
+    await expect.poll(() => assistantRows.count()).toBeGreaterThan(0)
+    await expect.poll(() => assistantRows.last().textContent()).not.toBe('')
+    const firstAssistantRows = await assistantRows.count()
+    const transcriptBox = await transcript.boundingBox()
     const composerBox = await panel.locator('form').boundingBox()
     if (transcriptBox === null || composerBox === null) throw new Error('Side Chat panel layout is unavailable')
     expect(transcriptBox.height).toBeGreaterThan(composerBox.height)
@@ -105,6 +131,9 @@ describe('web e2e: assistant Side Chat', () => {
       () => childAgent.session.events.filter(event => event.type === 'turn/end').length,
       { timeout: 30_000 },
     ).toBe(childTurnsBefore + 2)
+    await expect.poll(() => userRows.count()).toBe(2)
+    await expect.poll(() => userRows.last().textContent()).toContain(SECOND_FOLLOW_UP)
+    await expect.poll(() => assistantRows.count()).toBeGreaterThan(firstAssistantRows)
 
     const appended = userTexts(childAgent.session.events).slice(childUsersBefore)
     const followUps = appended.filter(text => text.includes(FIRST_FOLLOW_UP) || text === SECOND_FOLLOW_UP)

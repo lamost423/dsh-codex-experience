@@ -38,6 +38,7 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
   #listeners = new Set<() => void>()
   #child: SessionFace | null = null
   #offChild: (() => void) | null = null
+  #seedBoundarySeq: number | null = null
   #fork: Promise<SessionFace> | null = null
   #closing: Promise<void> | null = null
   #disposing: Promise<void> | null = null
@@ -165,13 +166,32 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
         await this.sessions.discardEphemeral(childSessionId)
         throw new Error(`side chat child "${childSessionId}" is not addressable`)
       }
+      try {
+        await child.open()
+      } catch (error) {
+        await this.sessions.discardEphemeral(childSessionId)
+        throw error
+      }
+      const opened = child.getSnapshot()
+      if (opened.openState !== 'open') {
+        await this.sessions.discardEphemeral(childSessionId)
+        const detail = opened.openError === null
+          ? opened.openState
+          : `${opened.openError.code}: ${opened.openError.message}`
+        throw new Error(`side chat child history failed to open: ${detail}`)
+      }
+      this.#seedBoundarySeq = opened.chat.order.reduce((latest, key) => {
+        const anchor = opened.chat.nodes.get(key)?.anchorSeq
+        return anchor === undefined ? latest : Math.max(latest, anchor)
+      }, Number.NEGATIVE_INFINITY)
       this.#child = child
       this.#offChild = child.subscribe(() => {
-        this.#publish({ conversation: child.getSnapshot() })
+        const next = child.getSnapshot()
+        this.#publish({ conversation: this.#visibleConversation(next) })
       })
       this.#publish({
         childSessionId,
-        conversation: child.getSnapshot(),
+        conversation: this.#visibleConversation(opened),
         phase: 'ready',
         error: null,
       })
@@ -216,6 +236,7 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
     this.#offChild?.()
     this.#offChild = null
     this.#child = null
+    this.#seedBoundarySeq = null
     const childId = this.#view.childSessionId
     this.#publish({
       childSessionId: null,
@@ -225,6 +246,19 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
       error: null,
     })
     return childId
+  }
+
+  /** Hide the fork seed while retaining the child's live side-chat rows. */
+  #visibleConversation(snapshot: ConversationSnapshot): ConversationSnapshot {
+    const boundary = this.#seedBoundarySeq
+    if (boundary === null) return snapshot
+    const order = snapshot.chat.order.filter((key) => {
+      const anchor = snapshot.chat.nodes.get(key)?.anchorSeq
+      return anchor !== undefined && anchor > boundary
+    })
+    return order.length === snapshot.chat.order.length
+      ? snapshot
+      : { ...snapshot, chat: { ...snapshot.chat, order } }
   }
 
   #publish(patch: Partial<SideChatView>): void {

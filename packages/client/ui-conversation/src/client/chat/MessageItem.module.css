@@ -282,3 +282,22 @@
   white-space: nowrap;
   vertical-align: baseline;
 }
+
+.annotationLink {
+  display: inline-block;
+  color: var(--dsw-alias-label-primary-bluish);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.annotationLink:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.annotationLink:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--dsw-alias-border-focus);
+  outline-offset: 2px;
+}

@@ -1,4 +1,11 @@
 .root {
   position: relative;
   min-width: 0;
+  scroll-margin-block: 96px;
+}
+
+.root:target {
+  border-radius: 8px;
+  outline: 2px solid var(--dsw-alias-border-focus);
+  outline-offset: 6px;
 }

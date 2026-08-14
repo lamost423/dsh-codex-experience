@@ -59,15 +59,18 @@ describe('Side Chat assistant entry points', () => {
     expect(open).toHaveBeenCalledWith({ seq: 9, text: 'select this passage' })
   })
 
-  it('adds a selected passage to the current main conversation', () => {
+  it('opens an inline annotation composer and sends without using the main composer', async () => {
     const open = vi.fn()
     const addToConversation = vi.fn()
+    const submitAnnotation = vi.fn().mockResolvedValue({ ok: true })
     const rect = { left: 20, top: 40, width: 80, height: 20, right: 100, bottom: 60, x: 20, y: 40, toJSON: () => ({}) }
     Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => rect })
     const rendered = render(
       <div data-assistant-message-body>
         <span>annotate this passage</span>
-        <SideChatSelection {...({ seq: 11, open, addToConversation, t } as unknown as SideChatSelectionProps)} />
+        <SideChatSelection
+          {...({ seq: 11, open, addToConversation, submitAnnotation, t } as unknown as SideChatSelectionProps)}
+        />
       </div>,
     )
     vi.spyOn(rendered.container.firstElementChild!, 'getBoundingClientRect').mockReturnValue({ ...rect, left: 0, top: 0, width: 300, right: 300 })
@@ -77,8 +80,46 @@ describe('Side Chat assistant entry points', () => {
     fireEvent.pointerUp(document)
 
     fireEvent.click(screen.getByRole('button', { name: 'selection.add' }))
-    expect(addToConversation).toHaveBeenCalledWith({ seq: 11, text: 'annotate this passage' })
+    const composer = screen.getByPlaceholderText('selection.placeholder')
+    fireEvent.change(composer, { target: { value: '  explain this  ' } })
+    fireEvent.submit(composer.closest('form')!)
+
+    await vi.waitFor(() => {
+      expect(submitAnnotation).toHaveBeenCalledWith(
+        { seq: 11, text: 'annotate this passage' },
+        'explain this',
+      )
+    })
+    expect(addToConversation).not.toHaveBeenCalled()
     expect(open).not.toHaveBeenCalled()
+  })
+
+  it('can move the same annotation reference into the main composer', () => {
+    const addToConversation = vi.fn()
+    const rect = { left: 20, top: 40, width: 80, height: 20, right: 100, bottom: 60, x: 20, y: 40, toJSON: () => ({}) }
+    Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => rect })
+    const rendered = render(
+      <div data-assistant-message-body>
+        <span>use lower composer</span>
+        <SideChatSelection {...({
+          seq: 13,
+          open: vi.fn(),
+          addToConversation,
+          submitAnnotation: vi.fn(),
+          t,
+        } as unknown as SideChatSelectionProps)} />
+      </div>,
+    )
+    vi.spyOn(rendered.container.firstElementChild!, 'getBoundingClientRect')
+      .mockReturnValue({ ...rect, left: 0, top: 0, width: 300, right: 300 })
+    const range = document.createRange()
+    range.selectNodeContents(screen.getByText('use lower composer'))
+    window.getSelection()?.addRange(range)
+    fireEvent.pointerUp(document)
+
+    fireEvent.click(screen.getByRole('button', { name: 'selection.add' }))
+    fireEvent.click(screen.getByRole('button', { name: 'selection.useComposer' }))
+    expect(addToConversation).toHaveBeenCalledWith({ seq: 13, text: 'use lower composer' })
   })
 
   it('does not register when rendered outside an assistant boundary', () => {
