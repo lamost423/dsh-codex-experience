@@ -39,5 +39,13 @@ describe('Side Chat theme styles', () => {
     if (css === undefined) throw new Error('SideChatSelection.module.css is missing')
     expect(block(css, '.toolbar')).toContain('border: 1px solid var(--dsw-alias-border-l3)')
     expect(block(css, '.action')).toContain('border: 1px solid var(--dsw-alias-border-l4)')
+    expect(block(css, '.annotationEditor')).toContain('border: 1px solid var(--dsw-alias-border-l3)')
+  })
+
+  it('renders sent side-chat context as an unmistakable small quote', () => {
+    const css = styles.find(style => style.name === 'SideChatPanel.module.css')?.text
+    if (css === undefined) throw new Error('SideChatPanel.module.css is missing')
+    expect(block(css, '.inlineQuote')).toContain('border-left: 3px solid var(--dsw-alias-state-business-primary)')
+    expect(block(css, '.inlineQuote p')).toContain('font-size: 12px')
   })
 })

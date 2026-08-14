@@ -5,6 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { MarkdownText, MessageText } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { SIDE_CHAT_CONTEXT_PREFIX } from './controller.ts'
 import type { SideChatPanelProps } from './slots.ts'
 import css from './SideChatPanel.module.css'
 
@@ -12,6 +13,7 @@ interface TranscriptRow {
   key: string
   role: 'user' | 'assistant'
   text: string
+  quote?: string
 }
 
 function assistantText(blocks: readonly AssistantBlock[]): string {
@@ -22,13 +24,35 @@ function userText(node: UserMessageNode): string {
   return node.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n\n')
 }
 
+function splitSeedPrompt(text: string): { quote: string; question: string } | null {
+  const prefix = `${SIDE_CHAT_CONTEXT_PREFIX}\n\n`
+  if (!text.startsWith(prefix)) return null
+  const lines = text.slice(prefix.length).split('\n')
+  const quote: string[] = []
+  let cursor = 0
+  while (cursor < lines.length) {
+    const line = lines[cursor]
+    if (line === undefined || !line.startsWith('> ')) break
+    quote.push(line.slice(2))
+    cursor += 1
+  }
+  if (quote.length === 0 || lines[cursor] !== '') return null
+  const question = lines.slice(cursor + 1).join('\n').trim()
+  if (question === '') return null
+  return { quote: quote.join('\n'), question }
+}
+
 function transcript(snapshot: ConversationSnapshot | null): TranscriptRow[] {
   if (snapshot === null) return []
   const rows: TranscriptRow[] = []
   for (const key of snapshot.chat.order) {
     const node = snapshot.chat.nodes.get(key) as ChatNode | undefined
     if (node?.kind === 'user') {
-      rows.push({ key, role: 'user', text: userText(node.data) })
+      const text = userText(node.data)
+      const seed = splitSeedPrompt(text)
+      rows.push(seed === null
+        ? { key, role: 'user', text }
+        : { key, role: 'user', text: seed.question, quote: seed.quote })
     } else if (node?.kind === 'assistant-step') {
       const text = assistantText(node.data.blocks)
       if (text !== '') rows.push({ key, role: 'assistant', text })
@@ -90,7 +114,22 @@ export function SideChatPanel({ useSideChat, send, close, release, t }: SideChat
         {rows.length === 0 && view.phase !== 'forking' && <p className={css.state}>{t('panel.empty')}</p>}
         {rows.map(row => (
           <article key={row.key} className={css.message} data-role={row.role}>
-            {row.role === 'assistant' ? <MarkdownText text={row.text} /> : <MessageText text={row.text} />}
+            {row.role === 'assistant'
+              ? <MarkdownText text={row.text} />
+              : row.quote === undefined
+                ? <MessageText text={row.text} />
+                : (
+                  <div className={css.seedPrompt}>
+                    <aside className={css.inlineQuote} data-testid="side-chat-inline-quote">
+                      <span>{t('panel.quote')}</span>
+                      <p>{row.quote}</p>
+                    </aside>
+                    <div className={css.question}>
+                      <span>{t('panel.question')}</span>
+                      <div data-testid="side-chat-question"><MessageText text={row.text} /></div>
+                    </div>
+                  </div>
+                )}
           </article>
         ))}
         {view.error !== null && <p className={css.error}>{t('panel.error')}: {view.error}</p>}

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useSyncExternalStore } from 'react'
 import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import { SideChatAction } from '../src/client/SideChatAction.tsx'
 import { SideChatPanel } from '../src/client/SideChatPanel.tsx'
@@ -14,6 +15,30 @@ afterEach(() => {
 
 const t = (key: string): string => key
 Element.prototype.scrollIntoView = vi.fn()
+
+function annotationFace() {
+  type Annotation = { id: number; order: number; target: { seq: number; text: string }; comment: string }
+  let view: { annotations: Annotation[]; activeId: number | null } = { annotations: [], activeId: null }
+  const listeners = new Set<() => void>()
+  const publish = (next: typeof view): void => {
+    view = next
+    for (const listener of listeners) listener()
+  }
+  const useAnnotations = <T,>(select: (value: typeof view) => T): T => useSyncExternalStore(
+    (listener) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    () => select(view),
+  )
+  const addToConversation = vi.fn((target: Annotation['target']) => {
+    const annotation = { id: view.annotations.length + 1, order: view.annotations.length + 1, target, comment: '' }
+    publish({ annotations: [...view.annotations, annotation], activeId: annotation.id })
+    return annotation
+  })
+  const updateAnnotation = vi.fn((id: number, comment: string) => {
+    publish({ ...view, annotations: view.annotations.map(item => item.id === id ? { ...item, comment } : item) })
+  })
+  const activateAnnotation = vi.fn((id: number | null) => { publish({ ...view, activeId: id }) })
+  return { useAnnotations, addToConversation, updateAnnotation, activateAnnotation }
+}
 
 function panelProps(overrides: Record<string, unknown> = {}): SideChatPanelProps {
   const view = {
@@ -46,7 +71,9 @@ describe('Side Chat assistant entry points', () => {
     const rendered = render(
       <div data-assistant-message-body>
         <span>select this passage</span>
-        <SideChatSelection {...({ seq: 9, open, addToConversation, t } as unknown as SideChatSelectionProps)} />
+        <SideChatSelection
+          {...({ seq: 9, ...annotationFace(), open, addToConversation, t } as unknown as SideChatSelectionProps)}
+        />
       </div>,
     )
     vi.spyOn(rendered.container.firstElementChild!, 'getBoundingClientRect').mockReturnValue({ ...rect, left: 0, top: 0, width: 300, right: 300 })
@@ -59,17 +86,16 @@ describe('Side Chat assistant entry points', () => {
     expect(open).toHaveBeenCalledWith({ seq: 9, text: 'select this passage' })
   })
 
-  it('opens an inline annotation composer and sends without using the main composer', async () => {
+  it('stages a numbered annotation with an optional inline comment without sending', () => {
     const open = vi.fn()
-    const addToConversation = vi.fn()
-    const submitAnnotation = vi.fn().mockResolvedValue({ ok: true })
+    const annotations = annotationFace()
     const rect = { left: 20, top: 40, width: 80, height: 20, right: 100, bottom: 60, x: 20, y: 40, toJSON: () => ({}) }
     Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => rect })
     const rendered = render(
       <div data-assistant-message-body>
         <span>annotate this passage</span>
         <SideChatSelection
-          {...({ seq: 11, open, addToConversation, submitAnnotation, t } as unknown as SideChatSelectionProps)}
+          {...({ seq: 11, open, ...annotations, t } as unknown as SideChatSelectionProps)}
         />
       </div>,
     )
@@ -80,22 +106,17 @@ describe('Side Chat assistant entry points', () => {
     fireEvent.pointerUp(document)
 
     fireEvent.click(screen.getByRole('button', { name: 'selection.add' }))
-    const composer = screen.getByPlaceholderText('selection.placeholder')
-    fireEvent.change(composer, { target: { value: '  explain this  ' } })
-    fireEvent.submit(composer.closest('form')!)
-
-    await vi.waitFor(() => {
-      expect(submitAnnotation).toHaveBeenCalledWith(
-        { seq: 11, text: 'annotate this passage' },
-        'explain this',
-      )
-    })
-    expect(addToConversation).not.toHaveBeenCalled()
+    expect(screen.getByTestId('annotation-highlight-1')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'selection.annotation 1' })).toBeTruthy()
+    const comment = screen.getByPlaceholderText('selection.placeholder')
+    fireEvent.change(comment, { target: { value: 'explain this' } })
+    expect(annotations.updateAnnotation).toHaveBeenCalledWith(1, 'explain this')
+    expect(annotations.addToConversation).toHaveBeenCalledWith({ seq: 11, text: 'annotate this passage' })
     expect(open).not.toHaveBeenCalled()
   })
 
-  it('can move the same annotation reference into the main composer', () => {
-    const addToConversation = vi.fn()
+  it('keeps the first anchor while a second selection becomes annotation 2', () => {
+    const annotations = annotationFace()
     const rect = { left: 20, top: 40, width: 80, height: 20, right: 100, bottom: 60, x: 20, y: 40, toJSON: () => ({}) }
     Object.defineProperty(Range.prototype, 'getBoundingClientRect', { configurable: true, value: () => rect })
     const rendered = render(
@@ -104,8 +125,7 @@ describe('Side Chat assistant entry points', () => {
         <SideChatSelection {...({
           seq: 13,
           open: vi.fn(),
-          addToConversation,
-          submitAnnotation: vi.fn(),
+          ...annotations,
           t,
         } as unknown as SideChatSelectionProps)} />
       </div>,
@@ -118,12 +138,22 @@ describe('Side Chat assistant entry points', () => {
     fireEvent.pointerUp(document)
 
     fireEvent.click(screen.getByRole('button', { name: 'selection.add' }))
-    fireEvent.click(screen.getByRole('button', { name: 'selection.useComposer' }))
-    expect(addToConversation).toHaveBeenCalledWith({ seq: 13, text: 'use lower composer' })
+    window.getSelection()?.removeAllRanges()
+    const second = document.createRange()
+    second.selectNodeContents(screen.getByText('use lower composer'))
+    window.getSelection()?.addRange(second)
+    fireEvent.pointerUp(document)
+    fireEvent.click(screen.getByRole('button', { name: 'selection.add' }))
+
+    expect(screen.getByRole('button', { name: 'selection.annotation 1' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'selection.annotation 2' })).toBeTruthy()
+    expect(screen.getAllByPlaceholderText('selection.placeholder')).toHaveLength(1)
   })
 
   it('does not register when rendered outside an assistant boundary', () => {
-    render(<SideChatSelection {...({ seq: 1, open: vi.fn(), addToConversation: vi.fn(), t } as unknown as SideChatSelectionProps)} />)
+    render(<SideChatSelection {...({
+      seq: 1, ...annotationFace(), open: vi.fn(), addToConversation: vi.fn(), t,
+    } as unknown as SideChatSelectionProps)} />)
     fireEvent.pointerUp(document)
     expect(screen.queryByRole('button', { name: 'selection.open' })).toBeNull()
   })
@@ -136,7 +166,9 @@ describe('Side Chat assistant entry points', () => {
         <div data-assistant-message-body>
           <span>inside</span>
           <SideChatSelection
-            {...({ seq: 1, open: vi.fn(), addToConversation: vi.fn(), t } as unknown as SideChatSelectionProps)}
+            {...({
+              seq: 1, ...annotationFace(), open: vi.fn(), addToConversation: vi.fn(), t,
+            } as unknown as SideChatSelectionProps)}
           />
         </div>
         <span>outside</span>
@@ -168,13 +200,17 @@ describe('Side Chat assistant entry points', () => {
       <div data-assistant-message-body>
         <span>first</span>
         <SideChatSelection
-          {...({ seq: 1, open: vi.fn(), addToConversation: vi.fn(), t } as unknown as SideChatSelectionProps)}
+          {...({
+            seq: 1, ...annotationFace(), open: vi.fn(), addToConversation: vi.fn(), t,
+          } as unknown as SideChatSelectionProps)}
         />
       </div>
       <div data-assistant-message-body>
         <span>second</span>
         <SideChatSelection
-          {...({ seq: 2, open: vi.fn(), addToConversation: vi.fn(), t } as unknown as SideChatSelectionProps)}
+          {...({
+            seq: 2, ...annotationFace(), open: vi.fn(), addToConversation: vi.fn(), t,
+          } as unknown as SideChatSelectionProps)}
         />
       </div>
     </>)
@@ -203,8 +239,12 @@ describe('Side Chat assistant entry points', () => {
     const boundaryRef = { current: null as HTMLDivElement | null }
     const rendered = render(
       <div ref={(node) => { boundaryRef.current = node }} data-assistant-message-body>
-        <SideChatSelection {...({ seq: 1, open, addToConversation: vi.fn(), t } as unknown as SideChatSelectionProps)} />
-        <SideChatSelection {...({ seq: 2, open, addToConversation: vi.fn(), t } as unknown as SideChatSelectionProps)} />
+        <SideChatSelection {...({
+          seq: 1, ...annotationFace(), open, addToConversation: vi.fn(), t,
+        } as unknown as SideChatSelectionProps)} />
+        <SideChatSelection {...({
+          seq: 2, ...annotationFace(), open, addToConversation: vi.fn(), t,
+        } as unknown as SideChatSelectionProps)} />
       </div>,
     )
     const boundary = boundaryRef.current!
@@ -285,6 +325,28 @@ describe('Side Chat panel lifecycle', () => {
     expect(screen.getByText('child answer')).toBeTruthy()
     expect(screen.getByText('panel.error: failed')).toBeTruthy()
     expect(screen.queryByText('panel.empty')).toBeNull()
+  })
+
+  it('renders a sent side-chat seed as a small quote followed by the user question', () => {
+    const seed = '请基于主会话中这段内容回答，不要修改主任务：\n\n> quoted first line\n> quoted second line\n\nwhy?'
+    const conversation = {
+      chat: {
+        order: ['user'],
+        nodes: new Map([['user', { kind: 'user', data: { content: [{ type: 'text', text: seed }] } }]]),
+      },
+    } as unknown as ConversationSnapshot
+    const view = {
+      parentSessionId: 'parent', childSessionId: 'child', origin: null,
+      conversation, phase: 'ready', error: null,
+    }
+
+    render(<SideChatPanel {...panelProps({
+      useSideChat: (select: (value: unknown) => unknown) => select(view),
+    })} />)
+
+    expect(screen.getByTestId('side-chat-inline-quote').textContent).toContain('quoted first line')
+    expect(screen.getByTestId('side-chat-question').textContent).toBe('why?')
+    expect(screen.queryByText('请基于主会话中这段内容回答，不要修改主任务：')).toBeNull()
   })
 
   it('shows the creating state instead of the empty state', () => {

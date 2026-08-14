@@ -1,12 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent } from 'react'
+import type { KeyboardEvent } from 'react'
 import type { SideChatSelectionProps } from './slots.ts'
 import css from './SideChatSelection.module.css'
 
+interface RelativeRect {
+  readonly left: number
+  readonly top: number
+  readonly width: number
+  readonly height: number
+}
+
 interface SelectionState {
-  text: string
-  left: number
-  top: number
+  readonly text: string
+  readonly rects: readonly RelativeRect[]
+  readonly left: number
+  readonly top: number
+}
+
+interface AnnotationAnchor {
+  readonly id: number
+  readonly order: number
+  readonly rects: readonly RelativeRect[]
+  readonly left: number
+  readonly top: number
 }
 
 type SelectionSink = (selection: SelectionState | null) => void
@@ -18,6 +34,20 @@ let registrations = 0
 function clearActive(): void {
   activeSink?.(null)
   activeSink = null
+}
+
+function relativeRects(range: Range, boundary: HTMLElement): RelativeRect[] {
+  const host = boundary.getBoundingClientRect()
+  const clientRects = typeof range.getClientRects === 'function' ? [...range.getClientRects()] : []
+  const source = clientRects.length > 0 ? clientRects : [range.getBoundingClientRect()]
+  return source
+    .filter(rect => rect.width > 0 || rect.height > 0)
+    .map(rect => ({
+      left: rect.left - host.left,
+      top: rect.top - host.top,
+      width: rect.width,
+      height: rect.height,
+    }))
 }
 
 function inspectSelection(): void {
@@ -38,12 +68,23 @@ function inspectSelection(): void {
   }
   if (activeSink !== null && activeSink !== sink) activeSink(null)
   activeSink = sink
-  const rect = range.getBoundingClientRect()
+  const rects = relativeRects(range, boundary)
+  if (rects.length === 0) {
+    clearActive()
+    return
+  }
+  const first = rects[0]
+  const last = rects.at(-1)
+  if (first === undefined || last === undefined) {
+    clearActive()
+    return
+  }
   const host = boundary.getBoundingClientRect()
   sink({
     text,
-    left: Math.max(8, Math.min(host.width - 36, rect.left - host.left + rect.width / 2)),
-    top: Math.max(0, rect.top - host.top - 36),
+    rects,
+    left: Math.max(8, Math.min(host.width - 36, last.left + last.width / 2)),
+    top: Math.max(0, first.top - 36),
   })
 }
 
@@ -67,27 +108,25 @@ function listen(boundary: HTMLElement, sink: SelectionSink): () => void {
   }
 }
 
-/** Floating action shown only for a DOM selection inside its assistant body. */
+/** Selection toolbar plus persistent Codex-style numbered annotation anchors. */
 export function SideChatSelection({
-  seq, open, addToConversation, submitAnnotation, t,
+  seq,
+  open,
+  addToConversation,
+  updateAnnotation,
+  activateAnnotation,
+  useAnnotations,
+  t,
 }: SideChatSelectionProps) {
   const seatRef = useRef<HTMLDivElement | null>(null)
   const [selection, setSelection] = useState<SelectionState | null>(null)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const editingRef = useRef(false)
-  const revisionRef = useRef(0)
-  editingRef.current = editing
+  const [anchors, setAnchors] = useState<readonly AnnotationAnchor[]>([])
+  const annotationView = useAnnotations(value => value)
+  const liveIds = new Set(annotationView.annotations.map(annotation => annotation.id))
+  const visibleAnchors = anchors.filter(anchor => liveIds.has(anchor.id))
 
-  const dismiss = (): void => {
-    revisionRef.current += 1
+  const dismissSelection = (): void => {
     setSelection(null)
-    setEditing(false)
-    setDraft('')
-    setPending(false)
-    setError(null)
     window.getSelection()?.removeAllRanges()
   }
 
@@ -95,52 +134,82 @@ export function SideChatSelection({
     const boundary = seatRef.current?.closest<HTMLElement>('[data-assistant-message-body]')
     if (boundary === null || boundary === undefined) return undefined
     return listen(boundary, (next) => {
-      if (next === null && editingRef.current) return
-      revisionRef.current += 1
+      if (next !== null) activateAnnotation(null)
       setSelection(next)
-      setEditing(false)
-      setDraft('')
-      setPending(false)
-      setError(null)
     })
-  }, [])
+  }, [activateAnnotation])
 
-  const submit = async (): Promise<void> => {
-    if (selection === null || draft.trim() === '' || pending) return
-    const ticket = revisionRef.current
-    setPending(true)
-    setError(null)
-    const result = await submitAnnotation({ seq, text: selection.text }, draft.trim())
-    if (ticket !== revisionRef.current) return
-    setPending(false)
-    if (result.ok) dismiss()
-    else setError(result.error)
+  const addSelection = (): void => {
+    if (selection === null) return
+    const annotation = addToConversation({ seq, text: selection.text })
+    if (annotation === null) return
+    setAnchors(current => [...current, {
+      id: annotation.id,
+      order: annotation.order,
+      rects: selection.rects,
+      left: selection.left,
+      top: selection.top,
+    }])
+    dismissSelection()
   }
-  const onSubmit = (event: FormEvent): void => {
-    event.preventDefault()
-    void submit()
-  }
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
-    event.preventDefault()
-    void submit()
+
+  const onCommentKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if ((event.key === 'Enter' && !event.nativeEvent.isComposing) || event.key === 'Escape') {
+      event.preventDefault()
+      activateAnnotation(null)
+      event.currentTarget.blur()
+    }
   }
 
   return (
     <div ref={seatRef} className={css.seat}>
-      {selection !== null && !editing && (
-        <div
-          className={css.toolbar}
-          style={{ left: selection.left, top: selection.top }}
-        >
+      {visibleAnchors.flatMap(anchor => anchor.rects.map((rect, index) => (
+        <span
+          key={`${String(anchor.id)}-${String(index)}`}
+          className={css.highlight}
+          data-testid={index === 0 ? `annotation-highlight-${String(anchor.order)}` : undefined}
+          style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+        />
+      )))}
+      {visibleAnchors.map((anchor) => {
+        const annotation = annotationView.annotations.find(item => item.id === anchor.id)
+        if (annotation === undefined) return null
+        const last = anchor.rects.at(-1)
+        if (last === undefined) return null
+        const active = annotationView.activeId === annotation.id
+        return (
+          <div key={anchor.id}>
+            <button
+              type="button"
+              className={css.badge}
+              style={{ left: last.left + last.width, top: last.top - 10 }}
+              aria-label={`${t('selection.annotation')} ${String(annotation.order)}`}
+              onClick={() => { activateAnnotation(annotation.id) }}
+            >
+              {annotation.order}
+            </button>
+            {active && (
+              <div className={css.annotationEditor} style={{ left: anchor.left, top: anchor.top }}>
+                <input
+                  autoFocus
+                  value={annotation.comment}
+                  placeholder={t('selection.placeholder')}
+                  aria-label={t('selection.placeholder')}
+                  onChange={(event) => { updateAnnotation(annotation.id, event.currentTarget.value) }}
+                  onKeyDown={onCommentKeyDown}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {selection !== null && (
+        <div className={css.toolbar} style={{ left: selection.left, top: selection.top }}>
           <button
             type="button"
             className={css.action}
             onPointerDown={(event) => { event.preventDefault() }}
-            onClick={() => {
-              setEditing(true)
-              setError(null)
-            }}
+            onClick={addSelection}
           >
             {t('selection.add')}
           </button>
@@ -150,50 +219,12 @@ export function SideChatSelection({
             onPointerDown={(event) => { event.preventDefault() }}
             onClick={() => {
               open({ seq, text: selection.text })
-              dismiss()
+              dismissSelection()
             }}
           >
             {t('selection.open')}
           </button>
         </div>
-      )}
-      {selection !== null && editing && (
-        <form
-          className={`${css.toolbar} ${css.editor}`}
-          style={{ left: selection.left, top: selection.top }}
-          onSubmit={onSubmit}
-        >
-          <p className={css.preview}>{selection.text}</p>
-          <textarea
-            autoFocus
-            rows={3}
-            value={draft}
-            placeholder={t('selection.placeholder')}
-            disabled={pending}
-            onChange={(event) => { setDraft(event.currentTarget.value) }}
-            onKeyDown={onKeyDown}
-          />
-          {error !== null && <p className={css.error}>{t('selection.error')}: {error}</p>}
-          <div className={css.editorActions}>
-            <button type="button" className={css.action} disabled={pending} onClick={dismiss}>
-              {t('selection.cancel')}
-            </button>
-            <button
-              type="button"
-              className={css.action}
-              disabled={pending}
-              onClick={() => {
-                addToConversation({ seq, text: selection.text })
-                dismiss()
-              }}
-            >
-              {t('selection.useComposer')}
-            </button>
-            <button type="submit" className={css.primary} disabled={pending || draft.trim() === ''}>
-              {t('selection.send')}
-            </button>
-          </div>
-        </form>
       )}
     </div>
   )

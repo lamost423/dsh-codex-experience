@@ -2,6 +2,7 @@ import type {
   HostObservable, InjectFace, PropsLocale, PropsRuntime,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { AnnotationView, StagedAnnotation } from './annotations.ts'
 import type { AssistantQuoteTarget, SideChatSendResult, SideChatView } from './controller.ts'
 import type {} from './locales.ts'
 
@@ -10,13 +11,17 @@ export interface SideChatInjected {
   hooks: {
     /** One parent Session's Side Chat controller snapshot. */
     sideChat: HostObservable<SideChatView>
+    /** Current main-composer annotation attachment for this Session. */
+    annotations: HostObservable<AnnotationView>
   }
   /** Open the panel for a whole answer or a selected passage. */
   open: (target: AssistantQuoteTarget) => void
-  /** Add one answer-anchored quote to the current main composer. */
-  addToConversation: (target: AssistantQuoteTarget) => void
-  /** Send one answer-anchored inline annotation to the main conversation. */
-  submitAnnotation: (target: AssistantQuoteTarget, text: string) => Promise<SideChatSendResult>
+  /** Stage one answer-anchored annotation; never sends by itself. */
+  addToConversation: (target: AssistantQuoteTarget) => StagedAnnotation | null
+  /** Update the optional comment attached to one staged annotation. */
+  updateAnnotation: (id: number, comment: string) => void
+  /** Open one anchor's inline editor, or collapse all editors with null. */
+  activateAnnotation: (id: number | null) => void
   /** Send a prompt to the forked child Session. */
   send: (text: string) => Promise<SideChatSendResult>
   /** Close the details column and destroy its ephemeral child. */

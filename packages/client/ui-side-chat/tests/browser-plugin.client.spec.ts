@@ -47,16 +47,38 @@ async function bench() {
   ctx.provide('layout', layout)
   let draft = 'existing question'
   let draftRev = 1
+  let occurrences: Array<{ occurrenceId: number; source: string; ref: string; label: string; clipboardText: string; offset: number }> = []
+  let occurrenceSeq = 0
+  const inputListeners = new Set<() => void>()
+  const publishInput = (): void => { for (const listener of inputListeners) listener() }
   let insertAccepted = true
-  const setDraft = vi.fn((text: string) => { draft = text; draftRev += 1 })
-  const insertReference = vi.fn((_reference: unknown, span: { start: number; end: number }) => {
+  const setDraft = vi.fn((text: string) => {
+    draft = text
+    draftRev += 1
+    const offset = draft.indexOf('￼')
+    occurrences = offset < 0 ? [] : occurrences.map(item => ({ ...item, offset }))
+    publishInput()
+  })
+  const insertReference = vi.fn((
+    reference: { source: string; ref: string; label: string; clipboardText: string },
+    span: { start: number; end: number },
+  ) => {
+    if (!insertAccepted) return false
     draft = `${draft.slice(0, span.start)}￼${draft.slice(span.end)}`
     draftRev += 1
-    return insertAccepted
+    occurrenceSeq += 1
+    occurrences = [{ occurrenceId: occurrenceSeq, ...reference, offset: span.start }]
+    publishInput()
+    return true
   })
   ctx.provide('conversation', {
     input: { for: vi.fn(() => ({
-      state: { getSnapshot: () => ({ draft, draftRev }) }, setDraft, insertReference,
+      state: {
+        getSnapshot: () => ({ draft, draftRev, occurrences }),
+        subscribe: (listener: () => void) => { inputListeners.add(listener); return () => { inputListeners.delete(listener) } },
+      },
+      setDraft,
+      insertReference,
     })) },
   } as never)
   const offSource = vi.fn()
@@ -77,6 +99,8 @@ async function bench() {
     setInsertAccepted: (accepted: boolean) => { insertAccepted = accepted },
     setCurrentDraft: (value: string) => { draft = value; draftRev += 1 },
     setBindingEnabled: (enabled: boolean) => { bindingEnabled = enabled },
+    getDraft: () => draft,
+    getOccurrences: () => occurrences,
     actionFace: (sessionId: SessionId) => {
       const entry = ctx.slots.entries('conversation.chat.assistant-actions')[0]
       return (entry?.inject as ((id: SessionId) => SideChatInjected) | undefined)?.(sessionId)
@@ -136,48 +160,57 @@ describe('ui-side-chat browser plugin', () => {
     expect(face?.hooks.sideChat.getSnapshot().origin).toBeNull()
   })
 
-  it('adds an answer-anchored quote to the current main composer', async () => {
+  it('stages multiple annotations behind one composer count chip without prompting', async () => {
     const b = await bench()
     await b.fiber.await()
     const face = b.actionFace('parent' as SessionId)
 
-    face?.addToConversation({ seq: 12, text: 'selected\nanswer' })
+    const first = face?.addToConversation({ seq: 12, text: 'selected\nanswer' })
+    face?.updateAnnotation(first!.id, 'explain this')
+    const second = face?.addToConversation({ seq: 13, text: 'another answer' })
 
-    expect(b.insertReference).toHaveBeenCalledWith(expect.objectContaining({
+    expect(first).toMatchObject({ id: 1, order: 1, comment: '' })
+    expect(second).toMatchObject({ id: 2, order: 2, comment: '' })
+    expect(b.insertReference).toHaveBeenLastCalledWith(expect.objectContaining({
       source: 'answer-annotation',
-      label: '注释：selected answer',
-      clipboardText: '[注释：selected answer](#dsh-message-12)\n\n> selected\n> answer',
-    }), { start: 19, end: 19, draftRev: 2 })
-    expect(b.setDraft).toHaveBeenLastCalledWith('existing question\n\n￼\n\n')
+      label: '2 条注释',
+    }), expect.objectContaining({ start: 0, end: 0 }))
+    expect(b.getDraft().split('￼')).toHaveLength(2)
+    expect(b.getOccurrences()).toHaveLength(1)
+    expect(b.prompt).not.toHaveBeenCalled()
 
     const source = b.registerSource.mock.calls[0]?.[0]
-    expect(source?.codec?.clipboardText('annotation body')).toBe('annotation body')
-    await expect(source?.codec?.serialize('annotation body', new AbortController().signal))
-      .resolves.toBe('annotation body')
+    const bundleRef = b.insertReference.mock.calls.at(-1)?.[0].ref
+    if (bundleRef === undefined) throw new Error('missing annotation bundle ref')
+    await expect(source?.codec?.serialize(bundleRef, new AbortController().signal))
+      .resolves.toContain('[注释 1：selected answer](#dsh-message-12)')
+    await expect(source?.codec?.serialize(bundleRef, new AbortController().signal))
+      .resolves.toContain('explain this')
+    await expect(source?.codec?.serialize(bundleRef, new AbortController().signal))
+      .resolves.toContain('[注释 2：another answer](#dsh-message-13)')
     await expect(source?.candidates({} as never, {} as never)).resolves.toEqual([])
     expect(source?.onPick({} as never)).toBeUndefined()
   })
 
-  it('sends an inline annotation without replacing the main composer draft', async () => {
+  it('clears every staged annotation after the aggregate composer chip is sent or deleted', async () => {
     const b = await bench()
     await b.fiber.await()
     const face = b.actionFace('parent' as SessionId)
+    face?.addToConversation({ seq: 7, text: 'first' })
+    face?.addToConversation({ seq: 8, text: 'second' })
+    expect(face?.hooks.annotations.getSnapshot().annotations).toHaveLength(2)
 
-    await expect(face?.submitAnnotation({ seq: 8, text: 'selected answer' }, '  explain this  '))
-      .resolves.toEqual({ ok: true })
-    expect(b.prompt).toHaveBeenCalledWith([{
-      type: 'text',
-      text: '[注释：selected answer](#dsh-message-8)\n\n> selected answer\n\nexplain this',
-    }], 'queue')
-    expect(b.setDraft).not.toHaveBeenCalled()
+    b.setDraft('')
+
+    expect(face?.hooks.annotations.getSnapshot()).toEqual({ annotations: [], activeId: null })
   })
 
-  it('keeps no annotation side store and restores the draft when insertion is rejected', async () => {
+  it('restores the draft when annotation staging is rejected', async () => {
     const b = await bench()
     await b.fiber.await()
     const face = b.actionFace('parent' as SessionId)
     b.setInsertAccepted(false)
-    face?.addToConversation({ seq: 4, text: 'answer' })
+    expect(face?.addToConversation({ seq: 4, text: 'answer' })).toBeNull()
     expect(b.setDraft).toHaveBeenLastCalledWith('existing question')
 
     b.setCurrentDraft('   ')

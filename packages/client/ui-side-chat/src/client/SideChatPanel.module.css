@@ -78,6 +78,44 @@
   background: var(--dsw-alias-interactive-bg-hover-solid);
 }
 
+.seedPrompt {
+  display: grid;
+  gap: 10px;
+}
+
+.inlineQuote {
+  padding: 7px 9px;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-left: 3px solid var(--dsw-alias-state-business-primary);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.inlineQuote span,
+.question > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.inlineQuote p {
+  max-height: 84px;
+  margin: 0;
+  overflow: auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+}
+
+.question {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-s-14);
+}
+
 .state,
 .error {
   color: var(--dsw-alias-label-tertiary);

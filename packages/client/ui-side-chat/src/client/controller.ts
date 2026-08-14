@@ -4,6 +4,9 @@ import type {
 
 const QUOTE_LIMIT = 4_000
 
+/** Stable model-only instruction prefix; the panel recognizes and hides it from the transcript. */
+export const SIDE_CHAT_CONTEXT_PREFIX = '请基于主会话中这段内容回答，不要修改主任务：'
+
 /** Main-conversation material addressed by one side-chat gesture. */
 export interface AssistantQuoteTarget {
   readonly seq: number
@@ -92,7 +95,7 @@ export class SideChatController implements ObservableSnapshot<SideChatView> {
       const child = await this.#ensureChild(origin?.seq)
       const prompt = origin === null || origin.text === ''
         ? question
-        : `请基于主会话中这段内容回答，不要修改主任务：\n\n> ${origin.text.replaceAll('\n', '\n> ')}\n\n${question}`
+        : `${SIDE_CHAT_CONTEXT_PREFIX}\n\n> ${origin.text.replaceAll('\n', '\n> ')}\n\n${question}`
       const result = await child.prompt([{ type: 'text', text: prompt }], 'queue')
       if (!result.ok) {
         const error = `${result.error.code}: ${result.error.message}`
