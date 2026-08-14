@@ -1,0 +1,13 @@
+# Todo-freshness snapshot overlay: lower the production 5/8 thresholds to 2/3
+# so one short authored turn demonstrates the reminder, the hard admission
+# boundary, and recovery after a fresh whole-list update.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: todo-freshness-guard
+        name: '@deepseek-ai/dsh-todo-freshness-guard'
+        config:
+          reminderAfterCalls: 2
+          blockAfterCalls: 3

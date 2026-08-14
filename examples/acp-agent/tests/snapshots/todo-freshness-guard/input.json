@@ -1,0 +1,7 @@
+{
+  "steps": [
+    { "op": "initialize" },
+    { "op": "newSession" },
+    { "op": "prompt", "text": "Create an active todo, run four distinct bash probes, refresh the todo after the fourth probe is rejected, run one recovery probe, complete the todo, then reply TODO_FRESHNESS_OK." }
+  ]
+}

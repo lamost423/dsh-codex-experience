@@ -157,6 +157,15 @@
 - id: repeat-tool-reminder
   name: '@deepseek-ai/dsh-repeat-tool-reminder'
 
+# An unfinished todo list cannot silently remain stale across an unbounded tool
+# run. The first five non-bookkeeping attempts are advisory; after eight, the
+# agent must publish a fresh whole-list snapshot before another tool can run.
+- id: todo-freshness-guard
+  name: '@deepseek-ai/dsh-todo-freshness-guard'
+  config:
+    reminderAfterCalls: 5
+    blockAfterCalls: 8
+
 # The filesystem stack rides the SAME sandbox policy as bash: dsh-fs-sandbox
 # replaces dsh-fs-local behind ctx.fs and fences write/edit by the effective
 # mode (read-only denies, workspace-write contains to the workspace + temp

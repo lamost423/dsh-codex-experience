@@ -2323,6 +2323,24 @@ export interface Config {
 
 Source: [`packages/context/tmux-context/src/index.ts:34`](../packages/context/tmux-context/src/index.ts)
 
+<a id="deepseek-aidsh-todo-freshness-guard"></a>
+
+## `@deepseek-ai/dsh-todo-freshness-guard`
+
+Requires: `tools`
+
+```ts config-catalog
+/** Deployment-owned thresholds for todo freshness enforcement. */
+export interface Config {
+  /** Non-bookkeeping attempts after which one reminder is injected. */
+  reminderAfterCalls: number
+  /** Maximum non-bookkeeping attempts before later calls are denied. */
+  blockAfterCalls: number
+}
+```
+
+Source: [`packages/guard/todo-freshness-guard/src/index.ts:23`](../packages/guard/todo-freshness-guard/src/index.ts)
+
 <a id="deepseek-aidsh-token-meter"></a>
 
 ## `@deepseek-ai/dsh-token-meter`

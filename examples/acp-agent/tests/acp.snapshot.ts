@@ -45,6 +45,7 @@ const DEPTH_TWO_CONFIG = fileURLToPath(new URL('../depth-two.cordis.yml', import
 const CHILD_QUESTION_CONFIG = fileURLToPath(new URL('../child-question.cordis.yml', import.meta.url))
 const SESSION_SANDBOX_ROOT_CONFIG = fileURLToPath(new URL('../session-sandbox-root.cordis.yml', import.meta.url))
 const RETRY_CONFIG = fileURLToPath(new URL('../retry.cordis.yml', import.meta.url))
+const TODO_FRESHNESS_CONFIG = fileURLToPath(new URL('../todo-freshness.cordis.yml', import.meta.url))
 const SESSION_TITLE_CONFIG = fileURLToPath(new URL('../session-title.cordis.yml', import.meta.url))
 const SUBAGENT_REPORT_QUIET_CONFIG = fileURLToPath(
   new URL('../subagent-report-quiet.cordis.yml', import.meta.url),
@@ -353,6 +354,16 @@ const SCENARIOS: Scenario[] = [
   // the fixture scripts five identical todo_write calls and pins BOTH reminder
   // tiers (gentle at 3, detailed at 5) as injected user/message in transcript and log.
   { name: 'repeat-tool-reminder', hasModelTurn: true, recorded: false },
+  // Keyless authored replay through the real Loader/app/tool pipeline. A low
+  // 2/3 threshold pins advisory context, pre-execution denial, the absence of
+  // the denied command's side effect, and recovery after a fresh todo_write.
+  {
+    name: 'todo-freshness-guard',
+    hasModelTurn: true,
+    recorded: false,
+    overridden: true,
+    configPath: TODO_FRESHNESS_CONFIG,
+  },
   // Authored replay: a root AGENTS.md pins the session prefix, then a read in
   // nested/ discovers its narrower AGENTS.md as a raw, metadata-bearing
   // injected user/message. Both portable AGENTS.md fixtures are symlinks to a sibling

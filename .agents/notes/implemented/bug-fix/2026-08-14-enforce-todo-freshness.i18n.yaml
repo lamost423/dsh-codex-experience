@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-14-enforce-todo-freshness.md
+2026-08-14-enforce-todo-freshness.md: ae8d81a1c08346498e556f9a70160391af0fca47
+2026-08-14-enforce-todo-freshness.zh.md: 36c4c762d80ee495bc2d0ae1656ea0cf1b691042
