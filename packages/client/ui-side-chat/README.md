@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Optional Web Client Plugin that adds answer-anchored annotations and an ephemeral side conversation to assistant messages without switching the main Session. It contributes a whole-answer action to `conversation.chat.assistant-actions`, a two-action selection toolbar to `conversation.chat.assistant-body-overlay`, and the `side-chat` renderer to keyed `conversation.details.view`.
 
-`Add to conversation` appends an answer-annotation reference chip labeled with the source message sequence to the current main composer. The chip owns its bounded blockquote payload, so no plugin-global annotation store retains selected answer bodies. The input machine serializes that chip only when the user submits it; the accepted main prompt then records the quote in the parent Session log. `Ask in side chat` lazily calls `ctx.sessions.fork({ sessionId, atSeq, ephemeral: true })`, keeps the child out of Workspace attachment and ordinary task navigation, and opens its transcript in the existing details column. Closing the panel, replacing it with another details route, or leaving the parent Session discards the child Agent handle and removes the runtime-only Session. A failed discard preserves the handle so closing can retry.
+`Add to conversation` stages one or more answer annotations behind a single count chip in the current main composer. On submission, the chip serializes each annotation with a fixed source-message link, an explicit quoted-answer field, and an explicit user-question field; selected Markdown never enters the link label. The accepted main prompt then records the annotations in the parent Session log. `Ask in side chat` lazily calls `ctx.sessions.fork({ sessionId, atSeq, ephemeral: true })`, keeps the child out of Workspace attachment and ordinary task navigation, and opens its transcript in the existing details column. Closing the panel, replacing it with another details route, or leaving the parent Session discards the child Agent handle and removes the runtime-only Session. A failed discard preserves the handle so closing can retry.
 
 The selected or complete closing-answer text is bounded to 4,000 characters and atomically claimed before asynchronous fork work. It is restored if delivery fails and is prepended to exactly one accepted child prompt; concurrent sends are rejected. Closing waits for an in-flight fork before discarding it. The child is excluded from session persistence, projection caches, and telemetry, while its live event stream remains the authority for the open panel. The panel renders only user and assistant text.
 
@@ -21,15 +21,28 @@ After the user submits the main composer, the selected answer appears inside the
 ##### Submitted annotation
 
 ```markdown
-> 回答注释（消息 #<event-seq>）
+请逐条回答以下回复注释。“引用内容”来自你此前的回复；“用户问题”才是用户针对该引用填写的问题。
+
+### 注释 1
+
+引用位置：[查看原回复](#dsh-message-<event-seq>)
+
+引用内容：
+
 > <selected assistant text>
 
-<user text>
+用户问题：
+
+<optional annotation question>
+
+主输入框补充问题（如有）：
+
+<main composer text>
 ```
 
 #### Token effect
 
-The annotation adds the bounded selected text, its message-sequence label, and the user's prompt to the next parent request. It consumes no model tokens while it remains an unsubmitted composer chip.
+Each annotation adds the bounded selected text, its stable source link, semantic field labels, and its optional question to the next parent request. It consumes no model tokens while it remains behind an unsubmitted composer chip.
 
 #### KV Cache effect
 

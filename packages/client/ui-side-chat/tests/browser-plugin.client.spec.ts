@@ -183,13 +183,60 @@ describe('ui-side-chat browser plugin', () => {
     const bundleRef = b.insertReference.mock.calls.at(-1)?.[0].ref
     if (bundleRef === undefined) throw new Error('missing annotation bundle ref')
     await expect(source?.codec?.serialize(bundleRef, new AbortController().signal))
-      .resolves.toContain('[注释 1：selected answer](#dsh-message-12)')
+      .resolves.toContain('### 注释 1\n\n引用位置：[查看原回复](#dsh-message-12)')
     await expect(source?.codec?.serialize(bundleRef, new AbortController().signal))
-      .resolves.toContain('explain this')
+      .resolves.toContain('用户问题：\n\nexplain this')
     await expect(source?.codec?.serialize(bundleRef, new AbortController().signal))
-      .resolves.toContain('[注释 2：another answer](#dsh-message-13)')
+      .resolves.toContain('### 注释 2\n\n引用位置：[查看原回复](#dsh-message-13)')
     await expect(source?.candidates({} as never, {} as never)).resolves.toEqual([])
     expect(source?.onPick({} as never)).toBeUndefined()
+  })
+
+  it('serializes answer annotations with explicit quote and question fields', async () => {
+    const b = await bench()
+    await b.fiber.await()
+    const face = b.actionFace('parent' as SessionId)
+
+    const first = face?.addToConversation({
+      seq: 21,
+      text: '计数)、G-4（[候选] *默认* `路由`）',
+    })
+    face?.updateAnnotation(first!.id, '什么意思？')
+    face?.addToConversation({ seq: 22, text: '第二段\n引用' })
+
+    const source = b.registerSource.mock.calls[0]?.[0]
+    const bundleRef = b.insertReference.mock.calls.at(-1)?.[0].ref
+    if (bundleRef === undefined) throw new Error('missing annotation bundle ref')
+    await expect(source?.codec?.serialize(bundleRef, new AbortController().signal)).resolves.toBe([
+      '请逐条回答以下回复注释。“引用内容”来自你此前的回复；“用户问题”才是用户针对该引用填写的问题。',
+      '',
+      '### 注释 1',
+      '',
+      '引用位置：[查看原回复](#dsh-message-21)',
+      '',
+      '引用内容：',
+      '',
+      '> 计数)、G-4（[候选] *默认* `路由`）',
+      '',
+      '用户问题：',
+      '',
+      '什么意思？',
+      '',
+      '### 注释 2',
+      '',
+      '引用位置：[查看原回复](#dsh-message-22)',
+      '',
+      '引用内容：',
+      '',
+      '> 第二段',
+      '> 引用',
+      '',
+      '用户问题：',
+      '',
+      '（未填写）',
+      '',
+      '主输入框补充问题（如有）：',
+    ].join('\n'))
   })
 
   it('clears every staged annotation after the aggregate composer chip is sent or deleted', async () => {

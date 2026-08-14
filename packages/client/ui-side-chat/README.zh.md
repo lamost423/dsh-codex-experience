@@ -4,7 +4,7 @@
 
 可选 Web Client 插件：为 assistant 消息添加回答锚定注释和临时侧边对话，同时不切换主 Session。它向 `conversation.chat.assistant-actions` 贡献整段回答动作，向 `conversation.chat.assistant-body-overlay` 贡献双动作选区工具条，并向 keyed `conversation.details.view` 贡献 `side-chat` renderer。
 
-“添加到对话”会把带源消息序号标签的回答注释引用 chip 追加到当前主输入区。chip 自己持有有长度上限的引用块，因此插件全局不会另建注释存储来保留选中的回答正文。输入机只在用户提交时才序列化该 chip；主提示词被接受后，引用才记录进父 Session 日志。“在侧边聊天中提问”会延迟调用 `ctx.sessions.fork({ sessionId, atSeq, ephemeral: true })`，不把子会话挂入 Workspace 和普通任务导航，并在现有详情栏打开其 transcript（文本记录）。关闭面板、切换到其他详情路由或离开父 Session 都会丢弃子 agent（智能体）句柄，并移除仅存在于运行时的 Session。丢弃失败时会保留句柄，以便再次关闭时重试。
+“添加到对话”会把一条或多条回答注释暂存在当前主输入区的单个计数 chip 后面。提交时，该 chip 会把每条注释序列化为固定的源消息链接、明确的回答引用字段和明确的用户问题字段；选中内容里的 Markdown 不会进入链接标签。主提示词被接受后，这些注释才记录进父 Session 日志。“在侧边聊天中提问”会延迟调用 `ctx.sessions.fork({ sessionId, atSeq, ephemeral: true })`，不把子会话挂入 Workspace 和普通任务导航，并在现有详情栏打开其 transcript（文本记录）。关闭面板、切换到其他详情路由或离开父 Session 都会丢弃子 agent（智能体）句柄，并移除仅存在于运行时的 Session。丢弃失败时会保留句柄，以便再次关闭时重试。
 
 选中内容或完整收尾回答最多保留 4,000 个字符，并在异步 fork 工作前被原子领取。投递失败时会恢复引用；它只会追加到一条被接受的子会话提示词前；并发发送会被拒绝。关闭操作会等待正在创建的 fork 完成，再将其丢弃。子会话不进入持久化、投影缓存和遥测，其实时事件流是面板打开期间的权威。面板只渲染用户和 assistant 文本。
 
@@ -21,15 +21,28 @@
 ##### 已提交的注释
 
 ```markdown
-> 回答注释（消息 #<event-seq>）
+请逐条回答以下回复注释。“引用内容”来自你此前的回复；“用户问题”才是用户针对该引用填写的问题。
+
+### 注释 1
+
+引用位置：[查看原回复](#dsh-message-<event-seq>)
+
+引用内容：
+
 > <selected assistant text>
 
-<user text>
+用户问题：
+
+<optional annotation question>
+
+主输入框补充问题（如有）：
+
+<main composer text>
 ```
 
 #### Token effect
 
-注释会在父会话的下一次请求中增加有长度上限的选中文本、消息序号标签和用户提示词。它仍是未提交的输入区 chip 时，不消耗模型 token。
+每条注释会在父会话的下一次请求中增加有长度上限的选中文本、稳定的源消息链接、语义字段标签和可选问题。它仍位于未提交的输入区 chip 后面时，不消耗模型 token。
 
 #### KV Cache effect
 

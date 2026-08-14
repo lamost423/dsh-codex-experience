@@ -4,7 +4,6 @@ import type { AssistantQuoteTarget } from './controller.ts'
 
 const SOURCE = 'answer-annotation'
 const QUOTE_LIMIT = 4_000
-const LABEL_LIMIT = 80
 
 interface AnnotationOccurrence {
   readonly source: string
@@ -46,16 +45,23 @@ function bounded(text: string): string {
   return normalized.length <= QUOTE_LIMIT ? normalized : `${normalized.slice(0, QUOTE_LIMIT)}…`
 }
 
-function snippet(text: string): string {
-  const singleLine = text.replaceAll(/\s+/g, ' ').replaceAll(/[\[\]]/g, '')
-  return singleLine.length <= LABEL_LIMIT ? singleLine : `${singleLine.slice(0, LABEL_LIMIT)}…`
-}
-
 function annotationBlock(annotation: StagedAnnotation): string {
   const quote = annotation.target.text
-  const link = `[注释 ${String(annotation.order)}：${snippet(quote)}](#dsh-message-${String(annotation.target.seq)})`
-  const comment = annotation.comment.trim()
-  return `${link}\n\n> ${quote.replaceAll('\n', '\n> ')}${comment === '' ? '' : `\n\n${comment}`}`
+  const link = `[查看原回复](#dsh-message-${String(annotation.target.seq)})`
+  const comment = annotation.comment.trim() || '（未填写）'
+  return [
+    `### 注释 ${String(annotation.order)}`,
+    '',
+    `引用位置：${link}`,
+    '',
+    '引用内容：',
+    '',
+    `> ${quote.replaceAll('\n', '\n> ')}`,
+    '',
+    '用户问题：',
+    '',
+    comment,
+  ].join('\n')
 }
 
 /**
@@ -131,10 +137,16 @@ export class AnnotationController implements HostObservable<AnnotationView> {
     this.#emit()
   }
 
-  /** Model/clipboard expansion used when the main composer finally submits. */
+  /** Serialize staged passages as labelled model context with stable source links. */
   serialize(): string {
     if (this.#view.annotations.length === 0) throw new Error('annotation bundle is empty')
-    return this.#view.annotations.map(annotationBlock).join('\n\n')
+    return [
+      '请逐条回答以下回复注释。“引用内容”来自你此前的回复；“用户问题”才是用户针对该引用填写的问题。',
+      '',
+      this.#view.annotations.map(annotationBlock).join('\n\n'),
+      '',
+      '主输入框补充问题（如有）：',
+    ].join('\n')
   }
 
   dispose(): void {
