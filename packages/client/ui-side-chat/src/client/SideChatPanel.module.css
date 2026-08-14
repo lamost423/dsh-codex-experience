@@ -3,7 +3,7 @@
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
-  background: var(--dsw-alias-bg-primary);
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -14,7 +14,7 @@
   justify-content: space-between;
   min-height: 48px;
   padding: 0 14px;
-  border-bottom: 1px solid var(--dsw-alias-border-secondary);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
 
 .close {
@@ -36,9 +36,11 @@
   grid-row: 2;
   margin: 12px 14px 0;
   padding: 10px 12px;
-  border-left: 3px solid var(--dsw-alias-border-primary);
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  border-left: 3px solid var(--dsw-alias-border-l3);
   border-radius: 6px;
-  background: var(--dsw-alias-bg-secondary);
+  background: var(--dsw-alias-bg-layer-2);
 }
 
 .quote span {
@@ -68,7 +70,7 @@
   margin: 0 0 12px;
   padding: 9px 11px;
   border-radius: 10px;
-  background: var(--dsw-alias-bg-secondary);
+  background: var(--dsw-alias-bg-layer-2);
 }
 
 .message[data-role='user'] {
@@ -91,7 +93,7 @@
   display: grid;
   gap: 8px;
   padding: 12px 14px;
-  border-top: 1px solid var(--dsw-alias-border-secondary);
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
 .composer textarea {
@@ -99,9 +101,9 @@
   min-height: 68px;
   box-sizing: border-box;
   padding: 9px 10px;
-  border: 1px solid var(--dsw-alias-border-secondary);
+  border: 1px solid var(--dsw-alias-border-l3);
   border-radius: 9px;
-  background: var(--dsw-alias-bg-primary);
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-s-14);
   resize: vertical;
@@ -110,7 +112,7 @@
 .composer textarea:focus-visible,
 .composer button:focus-visible,
 .close:focus-visible {
-  outline: 2px solid var(--dsw-alias-border-focus);
+  outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: 1px;
 }
 
@@ -121,8 +123,8 @@
   padding: 0 14px;
   border: none;
   border-radius: 15px;
-  background: var(--dsw-alias-interactive-bg-primary);
-  color: var(--dsw-alias-label-inverse);
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
   cursor: pointer;
 }
 

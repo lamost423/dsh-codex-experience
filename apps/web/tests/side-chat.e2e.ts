@@ -6,7 +6,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
@@ -29,6 +29,39 @@ function userTexts(events: readonly SessionEvent[]): string[] {
   return events.flatMap(event => event.type === 'user/message'
     ? [event.data.content.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n')]
     : [])
+}
+
+async function selectAssistantText(page: Page): Promise<void> {
+  const body = page.locator('[data-assistant-message-body]').last()
+  await body.waitFor()
+  await body.evaluate((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let node = walker.nextNode()
+    while (node !== null && (node.textContent?.trim() ?? '') === '') node = walker.nextNode()
+    if (node === null || node.textContent === null) throw new Error('assistant answer has no selectable text')
+    const range = document.createRange()
+    range.setStart(node, 0)
+    range.setEnd(node, Math.min(node.textContent.length, 24))
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+    document.dispatchEvent(new Event('selectionchange', { bubbles: true }))
+  })
+}
+
+async function borderStyle(locator: Locator): Promise<{
+  width: string
+  style: string
+  color: string
+}> {
+  return locator.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      width: style.borderTopWidth,
+      style: style.borderTopStyle,
+      color: style.borderTopColor,
+    }
+  })
 }
 
 function twoTurnReplay(source: string): string {
@@ -85,6 +118,18 @@ describe('web e2e: assistant Side Chat', () => {
     if (sourceAgent === undefined) throw new Error('seeded source Agent is unavailable')
     const sourceUsersBefore = userTexts(sourceAgent.session.events).length
     await page.getByText('DONE', { exact: true }).waitFor({ timeout: 30_000 })
+
+    await selectAssistantText(page)
+    const addToConversation = page.getByRole('button', { name: 'Add to conversation' })
+    const askInSideChat = page.getByRole('button', { name: 'Ask in side chat' })
+    await addToConversation.waitFor()
+    expect(await borderStyle(addToConversation)).toMatchObject({ width: '1px', style: 'solid' })
+    expect(await borderStyle(askInSideChat)).toMatchObject({ width: '1px', style: 'solid' })
+    expect((await borderStyle(addToConversation)).color).not.toBe('rgba(0, 0, 0, 0)')
+    const toolbar = addToConversation.locator('..')
+    expect(await borderStyle(toolbar)).toMatchObject({ width: '1px', style: 'solid' })
+    await page.evaluate(() => { window.getSelection()?.removeAllRanges() })
+    await expect.poll(() => addToConversation.count()).toBe(0)
 
     await page.getByRole('button', { name: 'Side chat' }).last().click()
     const panel = page.locator('[data-side-chat-panel]')

@@ -13,19 +13,19 @@
   min-width: max-content;
   height: 34px;
   padding: 2px;
-  border: 1px solid var(--dsw-alias-border-secondary);
+  border: 1px solid var(--dsw-alias-border-l3);
   border-radius: 8px;
-  background: var(--dsw-alias-bg-elevated);
-  box-shadow: var(--dsw-alias-shadow-popover);
+  background: var(--dsw-alias-button-floating-fill);
+  box-shadow: var(--dsw-shadow-lv3);
   pointer-events: auto;
   overflow: hidden;
 }
 
 .action {
   padding: 0 10px;
-  border: 1px solid var(--dsw-alias-border-secondary);
+  border: 1px solid var(--dsw-alias-border-l4);
   border-radius: 6px;
-  background: var(--dsw-alias-bg-elevated);
+  background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: var(--dsw-font-xs-13);
   cursor: pointer;
@@ -36,7 +36,7 @@
 }
 
 .action:focus-visible {
-  outline: 2px solid var(--dsw-alias-border-focus);
+  outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: 1px;
 }
 
@@ -64,16 +64,16 @@
   min-height: 72px;
   resize: vertical;
   padding: 8px 10px;
-  border: 1px solid var(--dsw-alias-border-primary);
+  border: 1px solid var(--dsw-alias-border-l3);
   border-radius: 7px;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-sm-14);
+  font: var(--dsw-font-s-14);
   line-height: 20px;
 }
 
 .editor textarea:focus-visible {
-  outline: 2px solid var(--dsw-alias-border-focus);
+  outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: 1px;
 }
 
@@ -90,10 +90,10 @@
 
 .primary {
   padding: 0 12px;
-  border: 1px solid var(--dsw-alias-interactive-bg-primary);
+  border: 1px solid var(--dsw-alias-button-primary-fill);
   border-radius: 6px;
-  background: var(--dsw-alias-interactive-bg-primary);
-  color: var(--dsw-alias-label-inverse);
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
   font: var(--dsw-font-xs-13);
   cursor: pointer;
 }
@@ -106,6 +106,6 @@
 
 .error {
   margin: 0;
-  color: var(--dsw-alias-label-error);
+  color: var(--dsw-alias-state-error-primary);
   font: var(--dsw-font-xs-13);
 }
