@@ -91,7 +91,11 @@ export class AnnotationController implements HostObservable<AnnotationView> {
     return () => { this.#listeners.delete(listener) }
   }
 
-  /** Stage one selected passage and make its optional-comment editor active. */
+  /**
+   * Stage one selected passage and make its optional-comment editor active.
+   * @param target - finalized assistant event and selected answer text.
+   * @returns the staged annotation, or null when the controller cannot attach it to the current draft.
+   */
   stage(target: AssistantQuoteTarget): StagedAnnotation | null {
     if (this.#disposed) return null
     const text = bounded(target.text)
@@ -117,7 +121,11 @@ export class AnnotationController implements HostObservable<AnnotationView> {
     return annotation
   }
 
-  /** Update optional prose only; the aggregate reference serializer reads it live. */
+  /**
+   * Update optional prose only; the aggregate reference serializer reads it live.
+   * @param id - staged annotation identity.
+   * @param comment - current user question for the selected answer.
+   */
   update(id: number, comment: string): void {
     if (this.#disposed) return
     const index = this.#view.annotations.findIndex(annotation => annotation.id === id)
@@ -129,7 +137,10 @@ export class AnnotationController implements HostObservable<AnnotationView> {
     this.#emit()
   }
 
-  /** Focus one numbered anchor's editor, or collapse all inline editors. */
+  /**
+   * Focus one numbered anchor's editor, or collapse all inline editors.
+   * @param id - staged annotation identity, or null to collapse every editor.
+   */
   activate(id: number | null): void {
     if (this.#disposed || this.#view.activeId === id) return
     if (id !== null && !this.#view.annotations.some(annotation => annotation.id === id)) return
@@ -137,7 +148,10 @@ export class AnnotationController implements HostObservable<AnnotationView> {
     this.#emit()
   }
 
-  /** Serialize staged passages as labelled model context with stable source links. */
+  /**
+   * Serialize staged passages as labelled model context with stable source links.
+   * @returns the aggregate annotation block inserted into the accepted user message.
+   */
   serialize(): string {
     if (this.#view.annotations.length === 0) throw new Error('annotation bundle is empty')
     return [
@@ -149,6 +163,7 @@ export class AnnotationController implements HostObservable<AnnotationView> {
     ].join('\n')
   }
 
+  /** Stop observing the composer and release every annotation subscriber. */
   dispose(): void {
     if (this.#disposed) return
     this.#disposed = true
@@ -232,4 +247,5 @@ export class AnnotationController implements HostObservable<AnnotationView> {
   }
 }
 
+/** Input-trigger source id for the aggregate answer-annotation reference. */
 export const ANNOTATION_SOURCE = SOURCE
