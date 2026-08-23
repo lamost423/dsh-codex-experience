@@ -2,6 +2,8 @@
 
 [简体中文](README.md) | English
 
+![Codex-style annotations in DeepSeek Harness](assets/codex-annotations.gif)
+
 Codex-style answer annotations, ephemeral side chat, and todo freshness enforcement for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — shipped as community plugins **plus two small core patches** the annotation experience needs. DeepSeek Harness does not yet expose the two transcript extension points the plugins render through, so this repository carries them as a clean patch against upstream `master` (see `patches/`) alongside the plugin sources. Once upstream ships equivalent seams, the patches retire and this becomes a plain plugin repository.
 
 ## Packages

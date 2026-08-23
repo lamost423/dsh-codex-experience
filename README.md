@@ -2,6 +2,8 @@
 
 简体中文 | [English](README.en.md)
 
+![Codex-style annotations in DeepSeek Harness](assets/codex-annotations.gif)
+
 这是面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的社区增强包，提供 Codex 风格的回答注释、临时侧边对话和 Todo 状态新鲜度约束——以**社区插件加两个小核心补丁**的形式发布。DeepSeek Harness 目前还没有暴露注释体验所需的两个转录扩展点，所以本仓库在插件源码之外，附带一份针对上游 `master` 的干净补丁（见 `patches/`）。等上游提供等价的扩展点后，补丁退役，这里就变回一个纯插件仓库。
 
 ## 包结构
