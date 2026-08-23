@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-conversation",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Codex-style answer annotations and ephemeral side chat for DeepSeek Harness",
   "keywords": ["deepseek", "deepseek-harness", "dsh", "dsh-plugin", "codex", "annotations", "side-chat"],
   "type": "module",

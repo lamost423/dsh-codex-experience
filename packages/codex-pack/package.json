@@ -1,6 +1,6 @@
 {
   "name": "dsh-codex-pack",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Install Codex-style conversation UX and todo freshness enforcement together in DeepSeek Harness",
   "keywords": ["deepseek", "deepseek-harness", "dsh", "dsh-plugin", "codex", "bundle"],
   "type": "module",
