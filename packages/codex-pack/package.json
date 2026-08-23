@@ -1,0 +1,28 @@
+{
+  "name": "dsh-codex-pack",
+  "version": "0.1.0",
+  "description": "Install Codex-style conversation UX and todo freshness enforcement together in DeepSeek Harness",
+  "keywords": ["deepseek", "deepseek-harness", "dsh", "dsh-plugin", "codex", "bundle"],
+  "type": "module",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  },
+  "files": ["cordis.patch.yml", "README.md"],
+  "dependencies": {
+    "dsh-codex-conversation": "workspace:^",
+    "dsh-todo-freshness-guard": "workspace:^"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lamost423/dsh-codex-experience.git",
+    "directory": "packages/codex-pack"
+  },
+  "bugs": { "url": "https://github.com/lamost423/dsh-codex-experience/issues" },
+  "homepage": "https://github.com/lamost423/dsh-codex-experience#readme",
+  "publishConfig": { "access": "public" },
+  "license": "MIT"
+}

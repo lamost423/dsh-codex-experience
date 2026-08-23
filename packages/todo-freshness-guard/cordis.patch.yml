@@ -1,0 +1,6 @@
+- insert:
+    - id: todo-freshness-guard
+      name: dsh-todo-freshness-guard
+      config:
+        reminderAfterCalls: 5
+        blockAfterCalls: 8

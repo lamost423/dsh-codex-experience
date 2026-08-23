@@ -1,0 +1,65 @@
+{
+  "name": "dsh-codex-conversation",
+  "version": "0.1.0",
+  "description": "Codex-style answer annotations and ephemeral side chat for DeepSeek Harness",
+  "keywords": ["deepseek", "deepseek-harness", "dsh", "dsh-plugin", "codex", "annotations", "side-chat"],
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/index.d.ts", "default": "./lib/index.js" },
+    "./invariant": { "types": "./lib/invariant.d.ts", "default": "./lib/invariant.js" },
+    "./client": { "types": "./lib/client/index.d.ts", "default": "./lib/client.js" },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-input-trigger"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "lib/invariant.js",
+    "lib/invariant.d.ts",
+    "lib/client.js",
+    "lib/client.js.map",
+    "lib/client/**/*.d.ts",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1 <5",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-input-trigger": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-invariants": ">=0.1.0-rc.6 <0.2.0",
+    "react": ">=18.2.0 <19"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lamost423/dsh-codex-experience.git",
+    "directory": "packages/codex-conversation"
+  },
+  "bugs": { "url": "https://github.com/lamost423/dsh-codex-experience/issues" },
+  "homepage": "https://github.com/lamost423/dsh-codex-experience#readme",
+  "publishConfig": { "access": "public" },
+  "license": "MIT"
+}

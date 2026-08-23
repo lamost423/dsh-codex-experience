@@ -1,0 +1,9 @@
+- insert:
+    - id: codex-conversation
+      name: dsh-codex-conversation
+
+    - id: todo-freshness-guard
+      name: dsh-todo-freshness-guard
+      config:
+        reminderAfterCalls: 5
+        blockAfterCalls: 8
