@@ -22,7 +22,7 @@
 - Node.js：`^22.19.0 || >=24.0.0`
 - 当前状态：社区预览版
 
-DeepSeek Harness 仍处于开发者预览阶段，插件接口可能发生破坏性变化。插件源码依赖宿主的三项能力：临时侧边会话 fork、`conversation.chat.user-body` 气泡链、以及 `chatInlineDirectives` 正文指令词汇。后两项由随附补丁提供——针对上游 `master` 共 293 行纯新增改动，两个被改包的上游测试套件全量验证通过。在没有这两个转录接缝的 harness 上，注释特性只降级显示为字面文本：发出的消息格式完全一致，已有会话在打过补丁的 harness 上打开时会原地升级（机制见 `packages/codex-conversation/src/client/harness-compat.ts`）。已发布的 `0.1.0-rc.6` npm 包整体早于侧边会话 API，本仓库无法在其上编译。
+DeepSeek Harness 仍处于开发者预览阶段，插件接口可能发生破坏性变化。插件源码依赖宿主的三项能力：临时侧边会话 fork、`conversation.chat.user-body` 气泡链、以及 `chatInlineDirectives` 正文指令词汇。后两项由随附补丁提供——针对上游 `master` 共 293 行纯新增改动，两个被改包的上游测试套件全量验证通过。在没有这两个转录接缝的 harness 上，注释特性只降级显示为字面文本：发出的消息格式完全一致，已有会话在打过补丁的 harness 上打开时会原地升级（机制见 `packages/codex-conversation/src/client/harness-compat.ts`）。已发布的 `0.1.0-rc.6` npm 包整体早于侧边会话 API，本仓库无法在其上编译。之后的 npm 版本同样不提供这些接口（2026-09-28 实测 `0.1.5-rc.3` 与 `0.1.7-rc.2`）：两者都没有临时侧边会话接口、选区浮层插槽和详情栏插槽，所以对话插件在 npm 宿主上不可用。具体表现是：`0.1.5-rc.3` 上侧边对话按钮能显示，但一点击就报错；`0.1.7-rc.2` 上按钮因图标改名在渲染时就崩溃（宿主会隔离这个插槽，页面其他部分照常）。Todo Guard 不依赖这些接口，可以单独装在 npm 的 `0.1.0-rc.6` 至 `0.1.7-rc.2` 上。
 
 ## 应用核心补丁
 
