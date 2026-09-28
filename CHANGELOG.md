@@ -5,6 +5,8 @@
 Todo Guard 兼容 DSH 0.1.7 / Todo Guard works on DSH 0.1.7
 
 - 修复：DSH 0.1.7 的会话格式 4 拒收共享的 `plugin` 来源，Guard 注入提醒时整轮失败、该会话后续每一轮都失败。写格式 4 的宿主上提醒改用 `plugin:todo-freshness-guard`（与宿主迁移旧提醒得到的 kind 一致），格式 3 及以下的宿主保持原写法 / Fixed: DSH 0.1.7's Session format 4 refuses the shared `plugin` source, so the Guard's reminder failed the turn and every later turn of that Session. Hosts writing format 4 now get `plugin:todo-freshness-guard`, the kind their migration gives earlier reminders; hosts writing format 3 or older keep the shared wrapper.
+- 修复：宿主从 0.1.2-alpha.4 起去掉了 `Session.events`。Guard 在一轮进行中被重新挂载（例如改了它的配置）后补读本轮待办时会抛错，这一轮剩下的普通工具调用全部失败。现在按宿主提供的读取方式补读，两种都没有时不启用约束 / Fixed: Hosts from 0.1.2-alpha.4 onward removed `Session.events`, so a Guard remounted mid-turn (for example after a configuration change) failed every remaining ordinary tool call of that turn while recovering the current todo list. It now reads through whichever Session log reader the Host offers and stays off when there is none.
+- 升级：在 DSH 0.1.7 上已经遇到上述报错的会话，更新并重启 `dsh web` 后可以重新打开，出错那一轮记为中断，未写盘的部分无法找回。正在运行的宿主在重启前一直使用旧代码 / Upgrading: after updating, restart `dsh web`, because a running Host keeps the old code until it restarts. A Session hit by the error then reopens with that turn marked interrupted; its unsaved part cannot be recovered.
 
 ## v0.2.0 — 2026-08-23
 
