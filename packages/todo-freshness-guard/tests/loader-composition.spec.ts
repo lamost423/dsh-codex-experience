@@ -106,11 +106,15 @@ describe('todo freshness real Loader composition through cordis.yml', () => {
       signal, callId: CallId('todo'), name: 'todo_write', agent,
       arguments: { todos: [{ content: 'work', status: 'in_progress' }] },
     })
-    await ctx.tools.execute({ signal, callId: CallId('p1'), name: 'probe', arguments: {}, agent })
+    const reminded = await ctx.tools.execute({ signal, callId: CallId('p1'), name: 'probe', arguments: {}, agent })
     await ctx.tools.execute({ signal, callId: CallId('p2'), name: 'probe', arguments: {}, agent })
     const blocked = await ctx.tools.execute({ signal, callId: CallId('p3'), name: 'probe', arguments: {}, agent })
 
     expect(calls).toEqual(['probe', 'probe'])
+    // The pinned rc.6 packages write Session format 0, which keeps the shared plugin wrapper.
+    expect(reminded.additionalContexts?.map(context => context.source)).toEqual([
+      { kind: 'plugin', plugin: 'todo-freshness-guard', form: 'notice', summary: 'Todo status stale after 1 calls' },
+    ])
     expect(blocked.isError).toBe(true)
     expect(blocked.content).toEqual([{
       type: 'text', text: 'Error: task status is stale after 2 tool calls since the latest todo_write; '

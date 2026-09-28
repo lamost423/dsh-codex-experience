@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1 — 2026-09-28
+
+Todo Guard 兼容 DSH 0.1.7 / Todo Guard works on DSH 0.1.7
+
+- 修复：DSH 0.1.7 的会话格式 4 拒收共享的 `plugin` 来源，Guard 注入提醒时整轮失败、该会话后续每一轮都失败。写格式 4 的宿主上提醒改用 `plugin:todo-freshness-guard`（与宿主迁移旧提醒得到的 kind 一致），格式 3 及以下的宿主保持原写法 / Fixed: DSH 0.1.7's Session format 4 refuses the shared `plugin` source, so the Guard's reminder failed the turn and every later turn of that Session. Hosts writing format 4 now get `plugin:todo-freshness-guard`, the kind their migration gives earlier reminders; hosts writing format 3 or older keep the shared wrapper.
+
 ## v0.2.0 — 2026-08-23
 
 结构化注释 v2：对话像引用，回答会回引 / Structured annotations v2: quotes in, citations back

@@ -11,10 +11,19 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { ContextFormed } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, TodoItem } from '@deepseek-ai/dsh-session'
 import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { PostToolDecision, PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+
+declare module '@deepseek-ai/dsh-llm' {
+  interface MessageSourceMap {
+    /** This guard's own producer kind, used where the Session format refuses the shared `plugin` kind. */
+    'plugin:todo-freshness-guard': { kind: 'plugin:todo-freshness-guard' } & ContextFormed
+  }
+}
 
 export const name = 'todo-freshness-guard'
 export const inject = ['tools']
@@ -46,7 +55,16 @@ interface ReminderReservation {
 }
 
 const TODO_TOOL = 'todo_write'
-const PLUGIN_SOURCE = { kind: 'plugin' as const, plugin: 'todo-freshness-guard' }
+/**
+ * Reminder attribution. Session format 4 (Host 0.1.7) refuses the shared
+ * `{ kind: 'plugin' }` wrapper, and its V3-to-V4 migration rewrites this
+ * guard's earlier reminders to `plugin:todo-freshness-guard`, so new reminders
+ * carry that same kind. Hosts writing format 3 or older keep the wrapper: the
+ * V2-to-V3 migration their logs still pass through admits only known kinds.
+ */
+const PLUGIN_SOURCE = SESSION_FORMAT_VERSION >= 4
+  ? { kind: 'plugin:todo-freshness-guard' as const }
+  : { kind: 'plugin' as const, plugin: 'todo-freshness-guard' }
 
 /** Whether a whole list still represents unfinished work. */
 function active(todos: readonly TodoItem[]): boolean {
