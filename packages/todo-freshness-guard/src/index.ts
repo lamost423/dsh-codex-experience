@@ -71,10 +71,29 @@ function active(todos: readonly TodoItem[]): boolean {
   return todos.some(todo => todo.status !== 'completed')
 }
 
+/** The Session log reader each supported Host exposes: exactly one of the two. */
+interface SessionLogReader {
+  /** Host rc.6 through 0.1.2-alpha.3. */
+  readonly events?: readonly SessionEvent[]
+  /** Host 0.1.2-alpha.4 and later. */
+  snapshotEvents?(): readonly SessionEvent[]
+}
+
 /**
- * Recover the current turn's latest todo list when this plugin mounts after the
- * relevant events were already appended. A turn start bounds the projection,
- * matching the todo projection's own reset rule.
+ * Read the accepted Session log on every supported Host. A Host offering
+ * neither reader yields no history, which leaves enforcement off until the
+ * next `todo_write` or turn start instead of failing the tool call.
+ */
+function sessionEvents(session: Session): readonly SessionEvent[] {
+  const reader = session as unknown as SessionLogReader
+  return reader.snapshotEvents?.() ?? reader.events ?? []
+}
+
+/**
+ * Recover the current turn's latest todo list when this plugin mounts, or
+ * remounts after a configuration change, after the relevant events were already
+ * appended. A turn start bounds the projection, matching the todo projection's
+ * own reset rule.
  */
 function currentTodos(events: readonly SessionEvent[]): readonly TodoItem[] | undefined {
   for (const event of events.toReversed()) {
@@ -134,7 +153,7 @@ export function apply(ctx: Context, config: Config): void {
 
   function stateOf(agent: Agent): FreshnessState | undefined {
     const session = agent.session
-    if (!initialized.has(session)) reset(session, currentTodos(session.events))
+    if (!initialized.has(session)) reset(session, currentTodos(sessionEvents(session)))
     return states.get(session)
   }
 
