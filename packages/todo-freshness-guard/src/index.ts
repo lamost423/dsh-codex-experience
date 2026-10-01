@@ -59,8 +59,9 @@ const TODO_TOOL = 'todo_write'
  * Reminder attribution. Session format 4 (Host 0.1.7) refuses the shared
  * `{ kind: 'plugin' }` wrapper, and its V3-to-V4 migration rewrites this
  * guard's earlier reminders to `plugin:todo-freshness-guard`, so new reminders
- * carry that same kind. Hosts writing format 3 or older keep the wrapper: the
- * V2-to-V3 migration their logs still pass through admits only known kinds.
+ * carry that same kind. Hosts writing format 3 or older keep the wrapper:
+ * format 0-2 logs later pass through the V2-to-V3 migration, which admits
+ * only known kinds, and format 3 logs reach format 4 through the rewrite above.
  */
 const PLUGIN_SOURCE = SESSION_FORMAT_VERSION >= 4
   ? { kind: 'plugin:todo-freshness-guard' as const }
